@@ -1,16 +1,19 @@
 /**
  * Custom Markdown & HTML parser for rendering blog posts with full formatting:
  * Headings (#, ##, ###), Tables (| col | col |), Lists (* item, - item), Bold (**text**), 
- * Italics (*text*), Horizontal rules (---), and line breaks.
+ * Italics (*text*), Blockquotes (> quote), Images (![alt](url)), Links ([text](url)), Horizontal rules (---).
  */
 export function parseMarkdownToHtml(markdown: string): string {
   if (!markdown) return '';
 
-  const trimmed = markdown.trim();
-  let html = trimmed;
+  let html = markdown.trim().replace(/\r\n/g, '\n');
 
-  // 1. Normalize line endings
-  html = html.replace(/\r\n/g, '\n');
+  // 1. Parse Block Images (![alt](url)) first into full responsive image cards
+  html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_match, alt, src) => {
+    const cleanSrc = src.trim();
+    const cleanAlt = (alt || 'Product Image').trim();
+    return `\n\n<div class="my-8 rounded-3xl overflow-hidden shadow-md border border-neutral-200/80 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-3 max-w-2xl mx-auto"><img src="${cleanSrc}" alt="${cleanAlt}" class="w-full h-auto max-h-[450px] object-contain rounded-2xl mx-auto" loading="lazy" onError="this.src='https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=800&auto=format&fit=crop&q=80'" /><span class="block text-center text-xs text-neutral-500 dark:text-neutral-400 font-semibold mt-2.5 pb-1">${cleanAlt}</span></div>\n\n`;
+  });
 
   // 2. Parse Markdown Tables
   const tableRegex = /^\|(.+)\|\n\|(?:\s*[-:]+[-|\s:]*)\|\n((?:\|.+\|\n?)+)/gm;
@@ -99,29 +102,46 @@ export function parseMarkdownToHtml(markdown: string): string {
 
 /**
  * Format inline markdown syntax like **bold**, *italic*, `code`, and [links](url)
+ * Uses tokenization to guarantee URLs and tags are never corrupted by underscore regex.
  */
 function formatInlineMarkdown(text: string): string {
   if (!text) return '';
-  let formatted = text;
 
-  // Bold **text** or __text__
-  formatted = formatted.replace(/\*\*(.*?)\*\*/g, '<strong class="font-extrabold text-neutral-900 dark:text-white">$1</strong>');
-  formatted = formatted.replace(/__(.*?)__/g, '<strong class="font-extrabold text-neutral-900 dark:text-white">$1</strong>');
+  const tokens: string[] = [];
 
-  // Italic *text* or _text_
-  formatted = formatted.replace(/\*(.*?)\*/g, '<em class="italic">$1</em>');
-  formatted = formatted.replace(/_(.*?)_/g, '<em class="italic">$1</em>');
-
-  // Inline code `code`
-  formatted = formatted.replace(/`(.*?)`/g, '<code class="bg-neutral-100 dark:bg-neutral-800 px-1.5 py-0.5 rounded text-xs font-mono text-brand-600 dark:text-brand-400 border border-neutral-200 dark:border-neutral-700">$1</code>');
-
-  // Images ![alt](url) - MUST be parsed BEFORE regular links
-  formatted = formatted.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_match, alt, src) => {
-    return `<div class="my-8 rounded-3xl overflow-hidden shadow-md border border-neutral-200/80 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-3 max-w-2xl mx-auto"><img src="${src}" alt="${alt || 'Product Image'}" class="w-full h-auto max-h-[450px] object-contain rounded-2xl mx-auto" loading="lazy" onError="this.src='https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=800&auto=format&fit=crop&q=80'" /><span class="block text-center text-xs text-neutral-500 dark:text-neutral-400 font-semibold mt-2.5 pb-1">${alt || 'Product Review Photo'}</span></div>`;
+  // Protect HTML tags and Markdown links from italic/bold regex
+  let formatted = text.replace(/<[^>]+>/g, (match) => {
+    const placeholder = `__HTML_TOKEN_${tokens.length}__`;
+    tokens.push(match);
+    return placeholder;
   });
 
-  // Links [label](url)
-  formatted = formatted.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-brand-600 dark:text-brand-400 font-bold underline underline-offset-2 hover:text-brand-700">$1</a>');
+  // Protect Markdown Links [label](url)
+  formatted = formatted.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_match, label, url) => {
+    const placeholder = `__HTML_TOKEN_${tokens.length}__`;
+    const linkHtml = `<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-brand-600 dark:text-brand-400 font-bold underline underline-offset-2 hover:text-brand-700">${label}</a>`;
+    tokens.push(linkHtml);
+    return placeholder;
+  });
+
+  // Inline code `code`
+  formatted = formatted.replace(/`([^`]+)`/g, (_match, code) => {
+    const placeholder = `__HTML_TOKEN_${tokens.length}__`;
+    const codeHtml = `<code class="bg-neutral-100 dark:bg-neutral-800 px-1.5 py-0.5 rounded text-xs font-mono text-brand-600 dark:text-brand-400 border border-neutral-200 dark:border-neutral-700">${code}</code>`;
+    tokens.push(codeHtml);
+    return placeholder;
+  });
+
+  // Bold **text**
+  formatted = formatted.replace(/\*\*([^\*]+)\*\*/g, '<strong class="font-extrabold text-neutral-900 dark:text-white">$1</strong>');
+
+  // Italic *text*
+  formatted = formatted.replace(/\*([^\*\n]+)\*/g, '<em class="italic">$1</em>');
+
+  // Restore protected tokens
+  tokens.forEach((token, index) => {
+    formatted = formatted.replace(`__HTML_TOKEN_${index}__`, token);
+  });
 
   return formatted;
 }
