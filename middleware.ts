@@ -24,7 +24,15 @@ export function middleware(request: NextRequest) {
   const expectedSecret = process.env.ADMIN_SESSION_SECRET || 'authenticated_token_secret';
   const isAuthenticated = Boolean(sessionToken && sessionToken === expectedSecret);
 
-  // 1. Rewrite top-level aliases to /admin/*
+  // 1. Root / instantly redirects at the Edge before rendering any layout
+  if (pathname === '/') {
+    if (isAuthenticated) {
+      return NextResponse.redirect(new URL('/admin/dashboard', request.url));
+    }
+    return NextResponse.redirect(new URL('/admin/login', request.url));
+  }
+
+  // 2. Rewrite top-level aliases to /admin/*
   if (TOP_LEVEL_ADMIN_ROUTES[pathname]) {
     const targetAdminPath = TOP_LEVEL_ADMIN_ROUTES[pathname];
 
@@ -66,7 +74,7 @@ export function middleware(request: NextRequest) {
     return NextResponse.rewrite(new URL(targetAdminPath, request.url));
   }
 
-  // 2. Protect all /admin routes except /admin/login
+  // 3. Protect all /admin routes except /admin/login
   if (pathname.startsWith('/admin') && pathname !== '/admin/login') {
     if (!isAuthenticated) {
       const loginUrl = new URL('/admin/login', request.url);
