@@ -115,6 +115,11 @@ function formatInlineMarkdown(text: string): string {
   // Inline code `code`
   formatted = formatted.replace(/`(.*?)`/g, '<code class="bg-neutral-100 dark:bg-neutral-800 px-1.5 py-0.5 rounded text-xs font-mono text-brand-600 dark:text-brand-400 border border-neutral-200 dark:border-neutral-700">$1</code>');
 
+  // Images ![alt](url) - MUST be parsed BEFORE regular links
+  formatted = formatted.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_match, alt, src) => {
+    return `<div class="my-8 rounded-3xl overflow-hidden shadow-md border border-neutral-200/80 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-3 max-w-2xl mx-auto"><img src="${src}" alt="${alt || 'Product Image'}" class="w-full h-auto max-h-[450px] object-contain rounded-2xl mx-auto" loading="lazy" onError="this.src='https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=800&auto=format&fit=crop&q=80'" /><span class="block text-center text-xs text-neutral-500 dark:text-neutral-400 font-semibold mt-2.5 pb-1">${alt || 'Product Review Photo'}</span></div>`;
+  });
+
   // Links [label](url)
   formatted = formatted.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-brand-600 dark:text-brand-400 font-bold underline underline-offset-2 hover:text-brand-700">$1</a>');
 
