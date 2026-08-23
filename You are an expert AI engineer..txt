@@ -1,0 +1,106 @@
+You are an expert AI engineer.
+
+Build a production-ready AI Lead Finder Agent using Next.js, TypeScript, Prisma, PostgreSQL and Tailwind CSS.
+
+Goal:
+Automatically find businesses that need a new website or website improvements.
+
+Dashboard Features:
+- Start Agent
+- Stop Agent
+- Pause Agent
+- View Logs
+- Export Leads (CSV)
+- Progress Bar
+- Search Leads
+- Filters
+
+Agent Settings:
+- Business Type
+- Country
+- State
+- City
+- Number of Leads
+- Keywords
+- Minimum Rating
+- Website Required (Yes/No)
+
+Data Sources:
+- Google Maps
+- Public business directories
+- Public company websites
+
+For each business collect:
+- Business Name
+- Owner (if publicly available)
+- Website
+- Email (if publicly available)
+- Phone
+- Address
+- Google Rating
+- Reviews Count
+- Category
+
+After collecting a lead:
+
+Step 1
+Check if the business has a website.
+
+Step 2
+If there is no website:
+Mark Priority = High
+
+If website exists:
+Analyze:
+- Mobile Responsive
+- HTTPS
+- Page Speed
+- SEO Basics
+- Contact Form
+- Modern Design
+
+Generate a Website Score (0–100).
+
+If score is below 60:
+Priority = High
+
+If score is 60–80:
+Priority = Medium
+
+If score is above 80:
+Priority = Low
+
+Save everything in PostgreSQL.
+
+Dashboard Columns:
+Business
+Category
+City
+Website
+Email
+Phone
+Website Score
+Priority
+Status
+Date Found
+
+Status values:
+New
+Analyzed
+Demo Ready
+Email Ready
+Contacted
+Replied
+Won
+
+Include:
+- Pagination
+- Search
+- Filters
+- Sorting
+- Bulk Select
+- Export CSV
+- Responsive UI
+- Dark Mode
+
+Write clean, modular, production-ready code.

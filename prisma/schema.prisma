@@ -1,0 +1,424 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==========================================
+// TECHPULSE LEGACY / EXISTING CORE MODELS
+// ==========================================
+
+model Category {
+  id            String     @id @default(cuid())
+  name          String     @unique
+  slug          String     @unique
+  description   String?
+  icon          String?
+  image         String?
+  parentId      String?
+  parent        Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  subcategories Category[] @relation("CategoryHierarchy")
+  products      Product[]
+  blogs         Blog[]
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+}
+
+model Product {
+  id             String       @id @default(cuid())
+  name           String
+  slug           String       @unique
+  brand          String
+  price          String
+  images         String       // JSON string of image URLs
+  amazonUrl      String
+  affiliateUrl   String
+  categoryId     String
+  category       Category     @relation(fields: [categoryId], references: [id])
+  specifications String       // JSON string of key-value specs
+  features       String       // JSON string of feature bullet points
+  pros           String       // JSON string of pros list
+  cons           String       // JSON string of cons list
+  marketplaces   String?      // JSON string of regional prices & affiliate links
+  isFeatured     Boolean      @default(false)
+  isTrending     Boolean      @default(false)
+  isDeal         Boolean      @default(false)
+  status         String       @default("PUBLISHED") // DRAFT, PUBLISHED, HIDDEN, ARCHIVED
+  blogs          Blog[]
+  deals          Deal[]
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+model Blog {
+  id              String    @id @default(cuid())
+  title           String
+  slug            String    @unique
+  metaTitle       String?
+  metaDescription String?
+  featuredImage   String
+  content         String    // Rich HTML / Markdown content
+  specifications  String?   // JSON string
+  features        String?   // JSON string
+  pros            String?   // JSON string
+  cons            String?   // JSON string
+  faqs            String?   // JSON string of [{question, answer}]
+  conclusion      String?
+  amazonUrl       String
+  affiliateUrl    String?
+  marketplaces    String?   // JSON string of regional prices & affiliate links
+  status          String    @default("PUBLISHED") // DRAFT, PUBLISHED, HIDDEN, SCHEDULED
+  scheduledAt     DateTime?
+  categoryId      String
+  category        Category  @relation(fields: [categoryId], references: [id])
+  productId       String?
+  product         Product?  @relation(fields: [productId], references: [id], onDelete: SetNull)
+  tags            String    // JSON string or comma-separated
+  views           Int       @default(0)
+  comments        Comment[]
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      String   @default("ADMIN") // ADMIN, EDITOR, AUTHOR
+  status    String   @default("ACTIVE") // ACTIVE, INACTIVE
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  author    String
+  email     String
+  content   String
+  status    String   @default("PENDING") // PENDING, APPROVED, SPAM
+  blogId    String?
+  blog      Blog?    @relation(fields: [blogId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model NewsletterSubscriber {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  status    String   @default("SUBSCRIBED") // SUBSCRIBED, UNSUBSCRIBED
+  createdAt DateTime @default(now())
+}
+
+model Brand {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  slug        String   @unique
+  description String?
+  logo        String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Deal {
+  id            String   @id @default(cuid())
+  title         String
+  discount      String
+  originalPrice String
+  dealPrice     String
+  dealUrl       String
+  badge         String?  // Hot, Limited, Exclusive
+  productId     String?
+  product       Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  expiresAt     DateTime?
+  status        String   @default("PUBLISHED") // PUBLISHED, DRAFT, EXPIRED
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model Comparison {
+  id         String   @id @default(cuid())
+  title      String
+  slug       String   @unique
+  summary    String?
+  product1Id String
+  product2Id String
+  winnerId   String?
+  status     String   @default("PUBLISHED")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model AffiliateLink {
+  id          String   @id @default(cuid())
+  title       String
+  originalUrl String
+  cloakedUrl  String   @unique
+  category    String?
+  clicks      Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Advertisement {
+  id        String   @id @default(cuid())
+  title     String
+  location  String   // HEADER, SIDEBAR, IN_ARTICLE, FOOTER
+  image     String
+  targetUrl String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Analytics {
+  id         String   @id @default(cuid())
+  eventType  String   // PAGE_VIEW, AFFILIATE_CLICK, PRODUCT_VIEW, SEARCH
+  targetId   String?
+  targetType String?  // BLOG, PRODUCT, CATEGORY
+  path       String?
+  referrer   String?
+  keyword    String?
+  userAgent  String?
+  ipHash     String?
+  createdAt  DateTime @default(now())
+}
+
+model Setting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+model Media {
+  id        String   @id @default(cuid())
+  filename  String
+  url       String
+  size      Int
+  mimeType  String
+  createdAt DateTime @default(now())
+}
+
+// ==========================================
+// AI GROWTH HUB - MULTI-WEBSITE SAAS MODELS
+// ==========================================
+
+model Website {
+  id                  String               @id @default(cuid())
+  name                String
+  slug                String               @unique
+  domainUrl           String
+  niche               String
+  subNiche            String?
+  targetCountry       String               @default("India")
+  targetLanguage      String               @default("English")
+  targetAudience      String?
+  brandVoice          String?
+  contentStyle        String?
+  primaryTopics       String?              // JSON array
+  topicsToAvoid       String?              // JSON array
+  monetization        String?              // JSON array: ["AMAZON_AFFILIATE", "ADSENSE", ...]
+  publishingFrequency String               @default("WEEKLY") // DAILY, 3_PER_WEEK, WEEKLY, CUSTOM
+  approvalMode        String               @default("MANUAL") // MANUAL, SEMI_AUTOMATIC, AUTOMATIC
+  cmsType             String               @default("NATIVE") // NATIVE, WORDPRESS, WEBHOOK, CUSTOM
+  cmsConfig           String?              // JSON configuration for target CMS/API
+  status              String               @default("ACTIVE") // ACTIVE, PAUSED, ARCHIVED
+  articlesCount       Int                  @default(0)
+  trafficCount        Int                  @default(0)
+  affiliateClicks     Int                  @default(0)
+  lastAgentRun        DateTime?
+  agent               WebsiteAgent?
+  topics              TopicOpportunity[]
+  articles            ContentArticle[]
+  searchMetrics       SearchConsoleMetric[]
+  seoOpportunities    SEOpportunity[]
+  socialPackages      SocialPackage[]
+  automationRules     AutomationSchedule[]
+  activityLogs        AgentActivityLog[]
+  integrations        IntegrationCredential[]
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+}
+
+model WebsiteAgent {
+  id           String    @id @default(cuid())
+  websiteId    String    @unique
+  website      Website   @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  agentName    String
+  role         String    @default("Content and Growth Agent")
+  tone         String    @default("Clear, helpful, practical, trustworthy")
+  systemPrompt String?
+  memoryState  String?   // JSON object: brand voice, covered topics, reviewed products, affiliate rules, exclusions
+  customRules  String?   // JSON object of custom SEO and publishing rules
+  active       Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model TopicOpportunity {
+  id                  String    @id @default(cuid())
+  websiteId           String
+  website             Website   @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  topic               String
+  primaryKeyword      String
+  secondaryKeywords   String?   // JSON string array
+  searchIntent        String    // Informational, Commercial Investigation, Transactional, Navigational
+  buyerIntent         String    // High, Medium, Low
+  competitionEstimate String    // Low, Medium, High
+  contentOpportunity  String?
+  affiliatePotential  String    // High, Medium, Low
+  suggestedArticleType String   // Review, Buying Guide, Comparison, How-To, Round-up
+  suggestedTitle      String
+  priorityScore       Int       @default(75) // 0-100 score
+  scoreBreakdown      String?   // JSON: {searchOpportunity, relevance, buyerIntent, affiliatePotential, contentGap, trendPotential}
+  status              String    @default("DISCOVERED") // DISCOVERED, APPROVED, REJECTED, CONVERTED_TO_DRAFT
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+}
+
+model ContentArticle {
+  id                  String           @id @default(cuid())
+  websiteId           String
+  website             Website          @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  topicId             String?
+  title               String
+  slug                String
+  category            String
+  tags                String           // JSON string array or comma-separated
+  author              String           @default("AI Growth Agent")
+  featuredImage       String?
+  introduction        String?
+  content             String           // Rich Markdown/HTML
+  tables              String?          // JSON array of comparison tables
+  pros                String?          // JSON array of pros
+  cons                String?          // JSON array of cons
+  faqs                String?          // JSON array of [{question, answer}]
+  conclusion          String?
+  affiliateProducts   String?          // JSON array of [{name, url, affiliateUrl, merchant, price, pros, cons, cta}]
+  affiliateDisclosure String?
+  internalLinks       String?          // JSON array of suggested links
+  seoTitle            String?
+  metaDescription     String?
+  canonicalUrl        String?
+  schemaJson          String?          // Schema.org JSON-LD string
+  qualityScore        Int              @default(85) // 0-100
+  qualityBreakdown    String?          // JSON: {seoScore, contentScore, affiliateScore, readabilityScore, originalityCheck, technicalScore, validationFlags: []}
+  status              String           @default("DRAFT") // IDEA, DRAFT, REVIEW, APPROVED, SCHEDULED, PUBLISHED, REJECTED
+  scheduledFor        DateTime?
+  publishedAt         DateTime?
+  publishedUrl        String?
+  externalCmsId       String?
+  views               Int              @default(0)
+  affiliateClicks     Int              @default(0)
+  versions            ArticleVersion[]
+  socialPackages      SocialPackage[]
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+}
+
+model ArticleVersion {
+  id             String         @id @default(cuid())
+  articleId      String
+  article        ContentArticle @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  versionNumber  Int
+  title          String
+  content        String
+  metaDescription String?
+  changeSummary  String?
+  createdAt      DateTime       @default(now())
+}
+
+model SearchConsoleMetric {
+  id          String   @id @default(cuid())
+  websiteId   String
+  website     Website  @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  query       String?
+  page        String?
+  clicks      Int      @default(0)
+  impressions Int      @default(0)
+  ctr         Float    @default(0.0)
+  position    Float    @default(0.0)
+  country     String?
+  device      String?
+  date        DateTime @default(now())
+}
+
+model SEOpportunity {
+  id              String   @id @default(cuid())
+  websiteId       String
+  website         Website  @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  opportunityType String   // OPPORTUNITY_A (High imp low CTR), OPPORTUNITY_B (Pos 5-20), OPPORTUNITY_C (Query not targeted), OPPORTUNITY_D (Traffic decay)
+  title           String
+  targetUrl       String?
+  query           String?
+  metricSummary   String?
+  recommendation  String
+  status          String   @default("PENDING") // PENDING, APPLIED, DISMISSED
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model SocialPackage {
+  id          String          @id @default(cuid())
+  websiteId   String
+  website     Website         @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  articleId   String?
+  article     ContentArticle? @relation(fields: [articleId], references: [id], onDelete: SetNull)
+  platform    String          // PINTEREST, YOUTUBE_SHORTS, INSTAGRAM_REELS, MEDIUM
+  title       String
+  bodyContent String          // Caption / Script / Medium Article Markdown
+  mediaUrl    String?
+  tags        String?         // JSON string array / hashtags
+  hook        String?
+  cta         String?
+  sceneList   String?         // JSON string for video scene breakdowns
+  status      String          @default("DRAFT") // DRAFT, READY, PUBLISHED, FAILED
+  publishedAt DateTime?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+}
+
+model AutomationSchedule {
+  id            String    @id @default(cuid())
+  websiteId     String
+  website       Website   @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  ruleName      String    // DAILY_TOPIC_DISCOVERY, WEEKLY_CONTENT_PLAN, POST_PUBLISH_SOCIAL, WEEKLY_GSC_AUDIT, MONTHLY_DECAY_AUDIT
+  frequency     String    // DAILY, WEEKLY, MONTHLY, ON_PUBLISH
+  actionPayload String?   // JSON string options
+  isEnabled     Boolean   @default(false)
+  lastRunAt     DateTime?
+  lastRunStatus String?
+  nextRunAt     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model IntegrationCredential {
+  id              String   @id @default(cuid())
+  websiteId       String
+  website         Website  @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  provider        String   // GOOGLE_SEARCH_CONSOLE, GOOGLE_ANALYTICS, AMAZON_ASSOCIATES, OPENAI, GEMINI, CLAUDE, PINTEREST, YOUTUBE, INSTAGRAM, MEDIUM, WORDPRESS, WEBHOOK
+  displayName     String
+  status          String   @default("REQUIRES_CONNECTION") // CONNECTED, REQUIRES_CONNECTION, EXPIRED, ERROR
+  credentialsJson String?  // Server-side secure storage
+  configJson      String?  // Public / config JSON
+  errorMessage    String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model AgentActivityLog {
+  id          String   @id @default(cuid())
+  websiteId   String
+  website     Website  @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  agentName   String
+  actionType  String   // TOPIC_DISCOVERY, DRAFT_GENERATED, SEO_OPTIMIZATION, QUALITY_CHECK, PUBLISHING, SOCIAL_GENERATION, AUTOMATION_TRIGGER
+  message     String
+  details     String?  // JSON string
+  status      String   @default("SUCCESS") // SUCCESS, WARNING, ERROR, PENDING
+  createdAt   DateTime @default(now())
+}

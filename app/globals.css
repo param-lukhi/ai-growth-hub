@@ -1,0 +1,157 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    @apply transition-colors duration-300;
+    overflow-x: hidden;
+    max-width: 100vw;
+  }
+  body {
+    @apply bg-white text-neutral-900 font-sans antialiased transition-colors duration-300;
+    overflow-x: hidden;
+    max-width: 100vw;
+  }
+  .dark body {
+    @apply bg-neutral-950 text-neutral-100;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply tracking-tight font-extrabold text-neutral-900;
+  }
+  .dark h1, .dark h2, .dark h3, .dark h4, .dark h5, .dark h6 {
+    @apply text-white;
+  }
+}
+
+/* Custom Typography & Rich Text Blog Styling */
+.prose {
+  @apply text-neutral-800 leading-relaxed text-base;
+}
+.dark .prose {
+  @apply text-neutral-200;
+}
+
+.prose p {
+  @apply mb-5 leading-relaxed text-neutral-700;
+}
+.dark .prose p {
+  @apply text-neutral-300;
+}
+
+.prose h2 {
+  @apply text-2xl font-extrabold text-neutral-900 mt-10 mb-4 tracking-tight border-b border-neutral-100 pb-2;
+}
+.dark .prose h2 {
+  @apply text-white border-neutral-800;
+}
+
+.prose h3 {
+  @apply text-xl font-bold text-neutral-900 mt-8 mb-3 tracking-tight;
+}
+.dark .prose h3 {
+  @apply text-white;
+}
+
+.prose ul {
+  @apply list-disc list-inside space-y-2 mb-6 text-neutral-700;
+}
+.dark .prose ul {
+  @apply text-neutral-300;
+}
+
+.prose ol {
+  @apply list-decimal list-inside space-y-2 mb-6 text-neutral-700;
+}
+.dark .prose ol {
+  @apply text-neutral-300;
+}
+
+.prose li {
+  @apply leading-relaxed;
+}
+
+.prose a {
+  color: #2563eb;
+  font-weight: 600;
+  text-decoration-line: underline;
+  text-underline-offset: 2px;
+  transition-property: color;
+  transition-duration: 150ms;
+}
+.prose a:hover {
+  color: #1d4ed8;
+}
+.dark .prose a {
+  color: #60a5fa;
+}
+.dark .prose a:hover {
+  color: #93c5fd;
+}
+
+.prose blockquote {
+  border-left-width: 4px;
+  border-color: #3b82f6;
+  padding-left: 1rem;
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
+  margin-top: 1.5rem;
+  margin-bottom: 1.5rem;
+  font-style: italic;
+  color: #525252;
+  background-color: #fafafa;
+  border-top-right-radius: 0.75rem;
+  border-bottom-right-radius: 0.75rem;
+}
+.dark .prose blockquote {
+  color: #a3a3a3;
+  background-color: rgba(23, 23, 23, 0.6);
+}
+
+/* Custom Styled Scrollbars */
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #d4d4d4;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #a3a3a3;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #262626;
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #404040;
+}
+
+/* Modern Gradient Glow Utilities */
+.bg-grid-pattern {
+  background-size: 30px 30px;
+  background-image: linear-gradient(to right, rgba(0, 0, 0, 0.03) 1px, transparent 1px),
+                    linear-gradient(to bottom, rgba(0, 0, 0, 0.03) 1px, transparent 1px);
+}
+.dark .bg-grid-pattern {
+  background-image: linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+                    linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+}
+
+/* Ambient gradient background helper */
+.ambient-glow {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(80px);
+  pointer-events: none;
+  opacity: 0.4;
+}
+.dark .ambient-glow {
+  opacity: 0.18;
+}
+
