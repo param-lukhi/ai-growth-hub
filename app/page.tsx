@@ -11,43 +11,57 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 async function getData() {
-  const categories = await db.category.findMany({ take: 16, orderBy: { name: 'asc' } });
-  const featuredProducts = await db.product.findMany({
-    where: { status: 'PUBLISHED', isFeatured: true },
-    include: { category: true },
-    take: 4,
-  });
-  const trendingProducts = await db.product.findMany({
-    where: { status: 'PUBLISHED', isTrending: true },
-    include: { category: true },
-    take: 4,
-  });
-  const dealProducts = await db.product.findMany({
-    where: { status: 'PUBLISHED', isDeal: true },
-    include: { category: true },
-    take: 4,
-  });
-  const latestBlogs = await db.blog.findMany({
-    where: { status: 'PUBLISHED' },
-    include: { category: true },
-    orderBy: { createdAt: 'desc' },
-    take: 3,
-  });
+  try {
+    const categories = await db.category.findMany({ take: 16, orderBy: { name: 'asc' } }).catch(() => []);
+    const featuredProducts = await db.product.findMany({
+      where: { status: 'PUBLISHED', isFeatured: true },
+      include: { category: true },
+      take: 4,
+    }).catch(() => []);
+    const trendingProducts = await db.product.findMany({
+      where: { status: 'PUBLISHED', isTrending: true },
+      include: { category: true },
+      take: 4,
+    }).catch(() => []);
+    const dealProducts = await db.product.findMany({
+      where: { status: 'PUBLISHED', isDeal: true },
+      include: { category: true },
+      take: 4,
+    }).catch(() => []);
+    const latestBlogs = await db.blog.findMany({
+      where: { status: 'PUBLISHED' },
+      include: { category: true },
+      orderBy: { createdAt: 'desc' },
+      take: 3,
+    }).catch(() => []);
 
-  const settingsList = await db.setting.findMany();
-  const settings: Record<string, string> = {};
-  settingsList.forEach((s) => {
-    settings[s.key] = s.value;
-  });
+    const settingsList = await db.setting.findMany().catch(() => []);
+    const settings: Record<string, string> = {};
+    if (Array.isArray(settingsList)) {
+      settingsList.forEach((s) => {
+        settings[s.key] = s.value;
+      });
+    }
 
-  return {
-    categories,
-    featuredProducts,
-    trendingProducts,
-    dealProducts,
-    latestBlogs,
-    settings,
-  };
+    return {
+      categories: categories || [],
+      featuredProducts: featuredProducts || [],
+      trendingProducts: trendingProducts || [],
+      dealProducts: dealProducts || [],
+      latestBlogs: latestBlogs || [],
+      settings: settings || {},
+    };
+  } catch (error) {
+    console.error('Error fetching homepage data:', error);
+    return {
+      categories: [],
+      featuredProducts: [],
+      trendingProducts: [],
+      dealProducts: [],
+      latestBlogs: [],
+      settings: {},
+    };
+  }
 }
 
 export default async function HomePage() {

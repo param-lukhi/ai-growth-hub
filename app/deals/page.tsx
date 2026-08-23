@@ -15,7 +15,7 @@ export default async function DealsPage() {
     where: { status: 'PUBLISHED', isDeal: true },
     include: { category: true },
     orderBy: { createdAt: 'desc' },
-  });
+  }).catch(() => []);
 
   return (
     <div className="pb-16 pt-8 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">

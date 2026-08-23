@@ -17,11 +17,11 @@ export default async function BlogListPage() {
     where: { status: 'PUBLISHED' },
     include: { category: true },
     orderBy: { createdAt: 'desc' },
-  });
+  }).catch(() => []);
 
   const categories = await db.category.findMany({
     orderBy: { name: 'asc' },
-  });
+  }).catch(() => []);
 
   return (
     <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 py-12 px-4 sm:px-6 lg:px-8">

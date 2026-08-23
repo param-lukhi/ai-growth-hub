@@ -36,11 +36,11 @@ export default async function ProductsPage({
     where: whereClause,
     include: { category: true },
     orderBy: { createdAt: 'desc' },
-  });
+  }).catch(() => []);
 
   const categories = await db.category.findMany({
     orderBy: { name: 'asc' },
-  });
+  }).catch(() => []);
 
   const buyingGuides = [
     { label: 'Best Audio & Earbuds', slug: 'earbuds', icon: '🎧' },
