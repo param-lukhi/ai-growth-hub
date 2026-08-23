@@ -9,6 +9,7 @@ interface Blog {
   id: string;
   title: string;
   slug: string;
+  featuredImage?: string;
   status: string;
   views: number;
   createdAt: string;
@@ -213,10 +214,27 @@ export default function AdminBlogsPage() {
                 <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
                   {sortedBlogs.map((b) => (
                     <tr key={b.id} className="hover:bg-neutral-50 dark:hover:bg-neutral-800/50 transition-colors">
-                      <td className="p-4 font-bold text-neutral-900 dark:text-white max-w-xs truncate">
-                        <Link href={`/admin/blogs/${b.id}`} className="hover:text-brand-600">
-                          {b.title}
-                        </Link>
+                      <td className="p-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-12 h-12 rounded-xl overflow-hidden bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 shrink-0">
+                            <img
+                              src={b.featuredImage || 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=200&auto=format&fit=crop&q=80'}
+                              alt={b.title}
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=200&auto=format&fit=crop&q=80';
+                              }}
+                            />
+                          </div>
+                          <div className="max-w-xs truncate">
+                            <Link href={`/admin/blogs/${b.id}`} className="font-bold text-neutral-900 dark:text-white hover:text-brand-600 truncate block">
+                              {b.title}
+                            </Link>
+                            <span className="text-[11px] text-neutral-400 font-mono block truncate">
+                              /{b.slug}
+                            </span>
+                          </div>
+                        </div>
                       </td>
                       <td className="p-4 text-neutral-600 dark:text-neutral-400 font-medium">{b.category?.name}</td>
                       <td className="p-4">

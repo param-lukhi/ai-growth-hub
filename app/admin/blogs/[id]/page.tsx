@@ -811,6 +811,19 @@ export default function EditBlogPage({ params }: { params: { id: string } }) {
                     <span>{uploadingImage ? 'Uploading...' : 'Upload Image'}</span>
                   </label>
                 </div>
+
+                {featuredImage && (
+                  <div className="relative aspect-[16/9] w-full rounded-xl overflow-hidden border border-neutral-200 bg-neutral-100 mt-2">
+                    <img
+                      src={featuredImage}
+                      alt="Featured Image Preview"
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=800&auto=format&fit=crop&q=80';
+                      }}
+                    />
+                  </div>
+                )}
               </div>
             </div>
           </div>

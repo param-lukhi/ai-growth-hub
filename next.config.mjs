@@ -5,7 +5,12 @@ const nextConfig = {
       { protocol: 'https', hostname: 'images.unsplash.com' },
       { protocol: 'https', hostname: 'm.media-amazon.com' },
       { protocol: 'https', hostname: 'ecx.images-amazon.com' },
+      { protocol: 'https', hostname: 'images-na.ssl-images-amazon.com' },
+      { protocol: 'https', hostname: 'images-eu.ssl-images-amazon.com' },
       { protocol: 'https', hostname: 'via.placeholder.com' },
+      { protocol: 'https', hostname: '**.media-amazon.com' },
+      { protocol: 'https', hostname: '**.amazon.com' },
+      { protocol: 'https', hostname: '**.amazon.in' },
     ],
   },
 };
