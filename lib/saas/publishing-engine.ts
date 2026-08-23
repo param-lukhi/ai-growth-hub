@@ -148,7 +148,10 @@ async function publishToNativeTechPulse(
     });
   }
 
-  const publishedUrl = `${website.domainUrl.replace(/\/$/, '')}/blog/${article.slug}`;
+  const baseDomain = website.domainUrl && !website.domainUrl.includes('localhost')
+    ? website.domainUrl.replace(/\/$/, '')
+    : 'https://blogweb904.vercel.app';
+  const publishedUrl = `${baseDomain}/blog/${article.slug}`;
 
   // Update SaaS ContentArticle record
   await prisma.contentArticle.update({
