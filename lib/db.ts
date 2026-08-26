@@ -7,6 +7,16 @@ function getAdminDb() {
   }
 }
 
+// In-memory fallback database for serverless sessions when Firestore keys are absent
+const inMemoryDb: Record<string, any[]> = (globalThis as any).__inMemoryDb || ((globalThis as any).__inMemoryDb = {});
+
+function getMemoryCollection(collectionName: string): any[] {
+  if (!inMemoryDb[collectionName]) {
+    inMemoryDb[collectionName] = [];
+  }
+  return inMemoryDb[collectionName];
+}
+
 // Helper to convert Firestore timestamp/snapshot data to standard JS objects
 function formatDoc<T = any>(doc: any): T | null {
   if (!doc || !doc.exists) return null;
@@ -33,102 +43,123 @@ function createModelHelper(collectionName: string) {
 
   return {
     async findUnique(args: { where: Record<string, any>; include?: Record<string, any>; select?: Record<string, any> }) {
+      const { where, include } = args;
       try {
         const col = getCol();
-        if (!col) return null;
-
-        const { where, include } = args;
-        if (where.id) {
-          const snap = await col.doc(where.id).get();
-          if (!snap.exists) return null;
-          const item = formatDoc(snap);
-          if (item && include) {
-            await attachRelations(collectionName, item, include);
+        if (col) {
+          if (where.id) {
+            const snap = await col.doc(where.id).get();
+            if (snap.exists) {
+              const item = formatDoc(snap);
+              if (item && include) await attachRelations(collectionName, item, include);
+              return item;
+            }
+          } else {
+            const keys = Object.keys(where);
+            if (keys.length > 0) {
+              let q: any = col;
+              for (const k of keys) {
+                if (where[k] !== undefined) q = q.where(k, '==', where[k]);
+              }
+              const snapshot = await q.limit(1).get();
+              if (!snapshot.empty) {
+                const item = formatDoc(snapshot.docs[0]);
+                if (item && include) await attachRelations(collectionName, item, include);
+                return item;
+              }
+            }
           }
-          return item;
         }
-
-        // Query by unique field (e.g. slug, email, name)
-        const keys = Object.keys(where);
-        if (keys.length === 0) return null;
-
-        let q: any = col;
-        for (const k of keys) {
-          if (where[k] !== undefined) {
-            q = q.where(k, '==', where[k]);
-          }
-        }
-        const snapshot = await q.limit(1).get();
-        if (snapshot.empty) return null;
-        const item = formatDoc(snapshot.docs[0]);
-        if (item && include) {
-          await attachRelations(collectionName, item, include);
-        }
-        return item;
       } catch (error) {
         console.warn(`[FirestoreDb] findUnique error for ${collectionName}:`, error);
-        return null;
       }
+
+      // Memory Fallback
+      const memList = getMemoryCollection(collectionName);
+      const match = memList.find(item => {
+        return Object.entries(where).every(([k, v]) => item[k] === v);
+      });
+      if (match && include) {
+        await attachRelations(collectionName, match, include);
+      }
+      return match || null;
     },
 
 
     async findFirst(args: { where?: Record<string, any>; orderBy?: any; include?: Record<string, any>; select?: Record<string, any> } = {}) {
+      const { where = {}, include } = args;
       try {
         const col = getCol();
-        if (!col) return null;
-
-        const { where = {}, include } = args;
-        let q: any = col;
-        for (const k of Object.keys(where)) {
-          if (where[k] !== undefined) {
-            q = q.where(k, '==', where[k]);
+        if (col) {
+          let q: any = col;
+          for (const k of Object.keys(where)) {
+            if (where[k] !== undefined) {
+              q = q.where(k, '==', where[k]);
+            }
+          }
+          const snapshot = await q.limit(1).get();
+          if (!snapshot.empty) {
+            const item = formatDoc(snapshot.docs[0]);
+            if (item && include) await attachRelations(collectionName, item, include);
+            return item;
           }
         }
-        const snapshot = await q.limit(1).get();
-        if (snapshot.empty) return null;
-        const item = formatDoc(snapshot.docs[0]);
-        if (item && include) {
-          await attachRelations(collectionName, item, include);
-        }
-        return item;
       } catch (error) {
         console.warn(`[FirestoreDb] findFirst error for ${collectionName}:`, error);
-        return null;
       }
+
+      // Memory Fallback
+      const memList = getMemoryCollection(collectionName);
+      const match = memList.find(item => {
+        return Object.entries(where).every(([k, v]) => item[k] === v);
+      });
+      if (match && include) {
+        await attachRelations(collectionName, match, include);
+      }
+      return match || null;
     },
 
     async findMany(args: { where?: Record<string, any>; orderBy?: any; take?: number; skip?: number; include?: Record<string, any>; select?: any } = {}): Promise<any[]> {
+      const { where = {}, take, include } = args;
+      let dbResults: any[] = [];
+
       try {
         const col = getCol();
-        if (!col) return [];
-
-        const { where = {}, take, include } = args;
-        let q: any = col;
-
-        for (const k of Object.keys(where)) {
-          if (where[k] !== undefined) {
-            q = q.where(k, '==', where[k]);
+        if (col) {
+          let q: any = col;
+          for (const k of Object.keys(where)) {
+            if (where[k] !== undefined) {
+              q = q.where(k, '==', where[k]);
+            }
           }
-        }
-
-        if (take && take > 0) {
-          q = q.limit(take);
-        }
-
-        const snapshot = await q.get();
-        const results = snapshot.docs.map((doc: any) => formatDoc(doc)).filter(Boolean);
-
-        if (include && results.length > 0) {
-          for (const item of results) {
-            await attachRelations(collectionName, item, include);
+          if (take && take > 0) {
+            q = q.limit(take);
           }
+          const snapshot = await q.get();
+          dbResults = snapshot.docs.map((doc: any) => formatDoc(doc)).filter(Boolean);
         }
-
-        return results;
       } catch (error) {
         console.warn(`[FirestoreDb] findMany error for ${collectionName}:`, error);
-        return [];
       }
+
+      // Merge memory fallback results
+      const memList = getMemoryCollection(collectionName).filter(item => {
+        return Object.entries(where).every(([k, v]) => item[k] === v);
+      });
+
+      const mergedMap = new Map<string, any>();
+      for (const item of [...memList, ...dbResults]) {
+        mergedMap.set(item.id, item);
+      }
+      const results = Array.from(mergedMap.values());
+
+      if (include && results.length > 0) {
+        for (const item of results) {
+          await attachRelations(collectionName, item, include);
+        }
+      }
+
+      return take ? results.slice(0, take) : results;
     },
 
     async create(args: { data: Record<string, any>; include?: Record<string, any>; select?: Record<string, any> }) {
@@ -159,6 +190,15 @@ function createModelHelper(collectionName: string) {
       }
 
       const createdItem = { ...docData };
+
+      // Save to in-memory store fallback
+      const memList = getMemoryCollection(collectionName);
+      const existingIdx = memList.findIndex(i => i.id === finalId);
+      if (existingIdx >= 0) {
+        memList[existingIdx] = createdItem;
+      } else {
+        memList.push(createdItem);
+      }
 
       if (nestedOps.agent?.create) {
         const agentData = { ...nestedOps.agent.create, websiteId: finalId };
@@ -230,6 +270,15 @@ function createModelHelper(collectionName: string) {
         }
       }
 
+      // Update in memory store
+      const memList = getMemoryCollection(collectionName);
+      const memIdx = memList.findIndex(i => i.id === targetId);
+      if (memIdx >= 0) {
+        memList[memIdx] = { ...memList[memIdx], ...updatedItem };
+      } else {
+        memList.push(updatedItem);
+      }
+
       if (updatedItem && include) {
         await attachRelations(collectionName, updatedItem, include);
       }
@@ -240,42 +289,56 @@ function createModelHelper(collectionName: string) {
     async delete(args: { where: Record<string, any> }) {
       const { where } = args;
       const col = getCol();
-      if (!col) return null;
-
       let targetId = where.id;
+
       if (!targetId) {
         const existing = await this.findFirst({ where });
         if (!existing) return null;
         targetId = existing.id;
       }
-      try {
-        const snap = await col.doc(targetId).get();
-        const item = formatDoc(snap);
-        await col.doc(targetId).delete();
-        return item;
-      } catch (e) {
-        return null;
+
+      // Delete from memory store
+      const memList = getMemoryCollection(collectionName);
+      const memIdx = memList.findIndex(i => i.id === targetId);
+      let deletedItem = memIdx >= 0 ? memList[memIdx] : null;
+      if (memIdx >= 0) memList.splice(memIdx, 1);
+
+      if (col) {
+        try {
+          const snap = await col.doc(targetId).get();
+          const item = formatDoc(snap);
+          if (item) deletedItem = item;
+          await col.doc(targetId).delete();
+        } catch (e) {}
       }
+
+      return deletedItem;
     },
 
     async count(args: { where?: Record<string, any> } = {}) {
+      const { where = {} } = args;
+      let countVal = 0;
       try {
         const col = getCol();
-        if (!col) return 0;
-
-        const { where = {} } = args;
-        let q: any = col;
-        for (const k of Object.keys(where)) {
-          if (where[k] !== undefined) {
-            q = q.where(k, '==', where[k]);
+        if (col) {
+          let q: any = col;
+          for (const k of Object.keys(where)) {
+            if (where[k] !== undefined) {
+              q = q.where(k, '==', where[k]);
+            }
           }
+          const snapshot = await q.get();
+          countVal = snapshot.size;
         }
-        const snapshot = await q.get();
-        return snapshot.size;
       } catch (error) {
         console.warn(`[FirestoreDb] count error for ${collectionName}:`, error);
-        return 0;
       }
+
+      const memList = getMemoryCollection(collectionName).filter(item => {
+        return Object.entries(where).every(([k, v]) => item[k] === v);
+      });
+
+      return Math.max(countVal, memList.length);
     },
 
     async createMany(args: { data: Array<Record<string, any>> }) {
