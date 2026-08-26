@@ -229,6 +229,7 @@ export async function POST(request: Request) {
       newWebsite
     } = body;
 
+    let targetWebsiteId = websiteId;
     let createdSite: any = null;
 
     if (!targetWebsiteId && newWebsite) {
