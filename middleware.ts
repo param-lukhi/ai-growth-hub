@@ -20,7 +20,14 @@ const TOP_LEVEL_ADMIN_ROUTES: Record<string, string> = {
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  // 0. Skip middleware for API routes, Next.js static files, and public assets
+  if (pathname.startsWith('/api') || pathname.startsWith('/_next') || pathname.includes('.')) {
+    return NextResponse.next();
+  }
+
   const sessionToken = request.cookies.get('admin_session')?.value;
+
   const expectedSecret = process.env.ADMIN_SESSION_SECRET || 'authenticated_token_secret';
   const isAuthenticated = Boolean(sessionToken && sessionToken === expectedSecret);
 
