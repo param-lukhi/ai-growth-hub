@@ -282,6 +282,7 @@ export async function POST(request: Request) {
 
     const createdAgent = await prisma.agent.create({
       data: {
+        ownerId: body.ownerId || body.userId || 'admin-user-id',
         name: finalName,
         description: description || typeDef.defaultRole,
         agentType,

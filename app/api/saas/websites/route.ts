@@ -75,6 +75,7 @@ export async function POST(request: Request) {
     // Create Website
     const website = await prisma.website.create({
       data: {
+        ownerId: body.ownerId || body.userId || 'admin-user-id',
         name,
         slug: finalSlug,
         domainUrl: domainUrl.startsWith('http') ? domainUrl : `https://${domainUrl}`,
