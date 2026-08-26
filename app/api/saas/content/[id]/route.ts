@@ -3,6 +3,8 @@ import prisma from '@/lib/db';
 import { validateArticleQuality, generateSocialPackages } from '@/lib/saas/agent-engine';
 import { publishArticle, createSnapshotVersion } from '@/lib/saas/publishing-engine';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(
   request: Request,
   { params }: { params: { id: string } }

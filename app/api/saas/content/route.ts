@@ -6,6 +6,8 @@ import { analyzeContentInput } from '@/lib/saas/input-analyzer';
 import { buildArticleMediaPlan } from '@/lib/saas/media-engine';
 import { checkDuplicateContent } from '@/lib/saas/duplicate-checker';
 
+export const dynamic = 'force-dynamic';
+
 // GET /api/saas/content?websiteId=xxx&status=xxx
 export async function GET(request: Request) {
   try {

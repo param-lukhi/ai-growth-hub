@@ -1,4 +1,11 @@
-import { adminDb } from './firebase-admin';
+function getAdminDb() {
+  try {
+    const { adminDb } = require('./firebase-admin');
+    return adminDb || null;
+  } catch (e) {
+    return null;
+  }
+}
 
 // Helper to convert Firestore timestamp/snapshot data to standard JS objects
 function formatDoc<T = any>(doc: any): T | null {
@@ -14,12 +21,11 @@ function formatDoc<T = any>(doc: any): T | null {
 
 // Create collection-based model helper with safe fallback
 function createModelHelper(collectionName: string) {
-  const isFirestoreAvailable = () => Boolean(adminDb && typeof adminDb.collection === 'function');
-
   const getCol = () => {
-    if (!isFirestoreAvailable()) return null;
     try {
-      return adminDb.collection(collectionName);
+      const dbInstance = getAdminDb();
+      if (!dbInstance || typeof dbInstance.collection !== 'function') return null;
+      return dbInstance.collection(collectionName);
     } catch (e) {
       return null;
     }
@@ -274,9 +280,10 @@ function createModelHelper(collectionName: string) {
 
     async createMany(args: { data: Array<Record<string, any>> }) {
       const col = getCol();
-      if (col && adminDb && typeof adminDb.batch === 'function') {
+      const dbInstance = getAdminDb();
+      if (col && dbInstance && typeof dbInstance.batch === 'function') {
         try {
-          const batch = adminDb.batch();
+          const batch = dbInstance.batch();
           for (const item of args.data) {
             const docRef = item.id ? col.doc(item.id) : col.doc();
             batch.set(docRef, {

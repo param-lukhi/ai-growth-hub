@@ -77,9 +77,16 @@ export default function CreateAgentWizardPage() {
   // Load existing websites
   useEffect(() => {
     fetch('/api/saas/websites')
-      .then(res => res.json())
+      .then(async res => {
+        const contentType = res.headers.get('content-type') || '';
+        if (!contentType.includes('application/json')) {
+          console.warn('Expected JSON for websites list but received:', await res.text());
+          return { success: false, websites: [] };
+        }
+        return res.json();
+      })
       .then(data => {
-        if (data.success && Array.isArray(data.websites)) {
+        if (data && data.success && Array.isArray(data.websites)) {
           setExistingWebsites(data.websites);
           if (data.websites.length > 0) {
             setSelectedWebsiteId(data.websites[0].id);
@@ -183,15 +190,23 @@ export default function CreateAgentWizardPage() {
         body: JSON.stringify(payload)
       });
 
+      const contentType = res.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        const rawText = await res.text();
+        console.error('API returned non-JSON response:', rawText);
+        alert('Server returned an invalid response. Please try again.');
+        return;
+      }
+
       const data = await res.json();
-      if (data.success) {
+      if (res.ok && data.success) {
         router.push('/admin/agents');
       } else {
         alert(data.error || 'Failed to create agent.');
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      alert('Error creating agent');
+      alert(e.message || 'Error creating agent');
     } finally {
       setIsSubmitting(false);
     }

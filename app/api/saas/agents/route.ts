@@ -3,6 +3,8 @@ import prisma from '@/lib/db';
 import { ensureDefaultWebsitesSeeded } from '@/lib/saas/seed-data';
 import { AGENT_TYPES_REGISTRY, AgentTypeKey } from '@/lib/saas/agent-types-registry';
 
+export const dynamic = 'force-dynamic';
+
 // Helper to seed initial Agent records if needed
 async function ensureAgentRecordsSeeded() {
   await ensureDefaultWebsitesSeeded();

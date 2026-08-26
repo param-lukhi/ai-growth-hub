@@ -3,6 +3,8 @@ import prisma from '@/lib/db';
 import { executeAgentRun } from '@/lib/saas/multi-agent-runner';
 import { testAgentDiagnostics } from '@/lib/saas/agent-engine';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(
   request: Request,
   { params }: { params: { id: string } }

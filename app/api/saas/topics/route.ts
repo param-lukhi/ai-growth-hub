@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { calculateTopicScore } from '@/lib/saas/agent-engine';
 
+export const dynamic = 'force-dynamic';
+
 // GET /api/saas/topics?websiteId=xxx
 export async function GET(request: Request) {
   try {

@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { detectSEOpportunities } from '@/lib/saas/search-console';
 
+export const dynamic = 'force-dynamic';
+
 // GET /api/saas/search-console?websiteId=xxx
 export async function GET(request: Request) {
   try {

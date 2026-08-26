@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { AGENT_TYPES_REGISTRY, AgentTypeKey } from '@/lib/saas/agent-types-registry';
 
+export const dynamic = 'force-dynamic';
+
 // GET /api/saas/agents/[id]
 export async function GET(
   request: Request,
