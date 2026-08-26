@@ -1,10 +1,8 @@
-import { PrismaClient } from '@prisma/client';
+import { db as prisma } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 
-const prisma = new PrismaClient();
-
 async function main() {
-  console.log('Seeding database with initial tech models...');
+  console.log('Seeding Firestore database with initial tech models...');
 
   // 1. Seed Categories
   const categoriesData = [
@@ -53,7 +51,7 @@ async function main() {
 
   // Clean up legacy demo admin if present
   await prisma.user.deleteMany({
-    where: { email: { in: ['admin@techpulse.com', 'admin'] } }
+    where: { email: 'admin@techpulse.com' }
   }).catch(() => {});
 
   await prisma.user.upsert({
@@ -333,7 +331,4 @@ main()
   .catch((e) => {
     console.error(e);
     process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
   });

@@ -25,7 +25,11 @@ export async function GET() {
     return NextResponse.json({ success: true, websites });
   } catch (error: any) {
     console.error('Error fetching websites:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    let errorMessage = error.message || 'Failed to fetch websites.';
+    if (errorMessage.includes('DATABASE_URL') || errorMessage.includes('empty string') || errorMessage.includes('datasource')) {
+      errorMessage = 'Database connection (DATABASE_URL) is not configured in Vercel environment variables. Please add DATABASE_URL in Vercel Project Settings.';
+    }
+    return NextResponse.json({ success: false, error: errorMessage }, { status: 500 });
   }
 }
 
@@ -162,6 +166,10 @@ export async function POST(request: Request) {
     });
   } catch (error: any) {
     console.error('Error creating website:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    let errorMessage = error.message || 'Failed to create website and AI agent.';
+    if (errorMessage.includes('DATABASE_URL') || errorMessage.includes('credentials') || errorMessage.includes('ADC')) {
+      errorMessage = 'Firestore database credentials (FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY) are missing in environment variables.';
+    }
+    return NextResponse.json({ success: false, error: errorMessage }, { status: 500 });
   }
 }

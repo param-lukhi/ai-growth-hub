@@ -1,7 +1,5 @@
-import { PrismaClient } from '@prisma/client';
+import firestoreDb from '../lib/db';
 import bcrypt from 'bcryptjs';
-
-const prisma = new PrismaClient();
 
 async function setAdminPassword() {
   const newPassword = process.argv[2] || process.env.ADMIN_PASSWORD || 'AdminPassword123!';
@@ -15,7 +13,7 @@ async function setAdminPassword() {
   console.log(`Updating admin password for: ${targetEmail}...`);
   const hashedPassword = await bcrypt.hash(newPassword.trim(), 10);
 
-  const user = await prisma.user.upsert({
+  const user = await firestoreDb.user.upsert({
     where: { email: targetEmail },
     update: {
       password: hashedPassword,
@@ -38,7 +36,4 @@ setAdminPassword()
   .catch((err) => {
     console.error('Failed to set admin password:', err);
     process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
   });

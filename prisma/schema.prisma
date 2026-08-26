@@ -232,6 +232,9 @@ model Website {
   affiliateClicks     Int                  @default(0)
   lastAgentRun        DateTime?
   agent               WebsiteAgent?
+  agents              Agent[]
+  affiliatePlatforms  WebsiteAffiliatePlatform[]
+  agentRuns           AgentRun[]
   topics              TopicOpportunity[]
   articles            ContentArticle[]
   searchMetrics       SearchConsoleMetric[]
@@ -257,6 +260,93 @@ model WebsiteAgent {
   active       Boolean   @default(true)
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
+}
+
+// ==========================================
+// MULTI-AGENT ARCHITECTURE MODELS
+// ==========================================
+
+model Agent {
+  id               String       @id @default(cuid())
+  name             String
+  description      String?
+  agentType        String       // SEO_TRAFFIC, BLOG_WRITER, PRODUCT_REVIEW, PRODUCT_COMPARISON, AFFILIATE_CONTENT, SEARCH_CONSOLE, PINTEREST, YOUTUBE_SHORTS, INSTAGRAM_REELS, MEDIUM, CUSTOM
+  websiteId        String
+  website          Website      @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  status           String       @default("ACTIVE") // ACTIVE, PAUSED, ARCHIVED
+  instructions     String?      // Custom System prompt / instructions
+  goals            String?      // Goals / targets description
+  targetCountry    String       @default("India")
+  targetLanguage   String       @default("English")
+  targetAudience   String?
+  categories       String?      // JSON string array of categories
+  keywords         String?      // JSON string array of keywords
+  tone             String       @default("Clear, helpful, practical, trustworthy")
+  contentRules     String?      // JSON string of content rules (word count, formats, guidelines)
+  seoRules         String?      // JSON string of SEO rules
+  affiliateRules   String?      // JSON string of affiliate platform rules
+  publishingRules  String?      // JSON string of publishing rules
+  schedule         String?      // JSON or string (e.g. DAILY, 3_PER_WEEK, WEEKLY, cron)
+  aiModel          String       @default("gemini-2.5-flash")
+  tools            String?      // JSON string array of enabled tool IDs
+  memoryState      String?      // JSON object of isolated agent memory
+  runs             AgentRun[]
+  logs             AgentLog[]
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+}
+
+model AgentRun {
+  id             String     @id @default(cuid())
+  agentId        String
+  agent          Agent      @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  websiteId      String
+  website        Website    @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  task           String     // Task description or trigger type (MANUAL, SCHEDULED, TEST)
+  status         String     @default("RUNNING") // RUNNING, SUCCESS, FAILED, CANCELLED
+  startedAt      DateTime   @default(now())
+  completedAt    DateTime?
+  durationMs     Int?
+  output         String?    // JSON string output summary
+  error          String?    // Actual error message if failed
+  apiUsed        String?    // AI Model or API used
+  tokensUsed     Int?
+  costEstimate   Float?
+  logs           AgentLog[]
+}
+
+model AgentLog {
+  id         String    @id @default(cuid())
+  agentId    String
+  agent      Agent     @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  runId      String?
+  run        AgentRun? @relation(fields: [runId], references: [id], onDelete: SetNull)
+  level      String    @default("INFO") // INFO, WARN, ERROR, SUCCESS
+  message    String
+  details    String?   // JSON string
+  createdAt  DateTime  @default(now())
+}
+
+// ==========================================
+// MULTI-AFFILIATE PLATFORM MODELS
+// ==========================================
+
+model WebsiteAffiliatePlatform {
+  id               String   @id @default(cuid())
+  websiteId        String
+  website          Website  @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  platformName     String   // Amazon Associates, Flipkart Affiliate, Cuelinks, vCommission, impact.com, Custom
+  platformType     String   // AMAZON, FLIPKART, CUELINKS, VCOMMISSION, IMPACT, CUSTOM
+  country          String   @default("India")
+  trackingId       String   // Associate Tag / Partner ID / SubID / Campaign ID
+  credentialsJson  String?  // Server-side secure storage (API keys, secret keys, auth tokens)
+  deepLinkTemplate String?  // Deep link format template
+  priority         String   @default("PRIMARY") // PRIMARY, SECONDARY, TERTIARY
+  status           String   @default("CONNECTED") // CONNECTED, REQUIRES_CREDENTIALS, MANUAL_ONLY, DISABLED
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([websiteId, platformName])
 }
 
 model TopicOpportunity {

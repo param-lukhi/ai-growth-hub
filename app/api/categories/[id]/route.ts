@@ -54,7 +54,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       }
 
       // Check if the proposed parent is one of this category's existing subcategories
-      const isChild = existing.subcategories.some((sub) => sub.id === parentId);
+      const isChild = existing.subcategories?.some((sub: any) => sub.id === parentId);
       if (isChild) {
         return NextResponse.json({ error: 'Cannot set a subcategory as parent' }, { status: 400 });
       }

@@ -34,7 +34,7 @@ export default async function CategoryPage({ params }: { params: { slug: string 
   if (!category) notFound();
 
   // If main category has subcategories, we fetch articles/products of this category + its subcategories
-  const subcategoryIds = category.subcategories.map((s) => s.id);
+  const subcategoryIds = category.subcategories?.map((s: any) => s.id) || [];
   const targetCategoryIds = [category.id, ...subcategoryIds];
 
   const blogs = await db.blog.findMany({
@@ -99,7 +99,7 @@ export default async function CategoryPage({ params }: { params: { slug: string 
             <div className="pt-4">
               <span className="text-xs font-bold text-neutral-400 block mb-2">Explore Subcategories:</span>
               <div className="flex flex-wrap gap-2">
-                {category.subcategories.map((sub) => (
+                {category.subcategories?.map((sub: any) => (
                   <Link
                     key={sub.id}
                     href={`/category/${sub.slug}`}

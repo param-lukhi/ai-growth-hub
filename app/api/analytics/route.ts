@@ -64,7 +64,7 @@ export async function GET() {
     });
 
     const clicksMap: Record<string, number> = {};
-    affiliateClickGroup.forEach((group) => {
+    affiliateClickGroup.forEach((group: any) => {
       if (group.targetId) {
         clicksMap[group.targetId] = (clicksMap[group.targetId] || 0) + group._count.id;
       }
@@ -78,7 +78,7 @@ export async function GET() {
     });
 
     // 5. Process per-blog detailed analytics strictly from tracked database events
-    const blogAnalytics = blogs.map((blog) => {
+    const blogAnalytics = blogs.map((blog: any) => {
       const realClicks = (clicksMap[blog.id] || 0) + (clicksMap[blog.slug] || 0);
       const blogViews = blog.views || 0;
       const blogCtr = blogViews > 0 ? ((realClicks / blogViews) * 100).toFixed(1) : '0.0';

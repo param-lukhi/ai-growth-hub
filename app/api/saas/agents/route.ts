@@ -1,33 +1,99 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { ensureDefaultWebsitesSeeded } from '@/lib/saas/seed-data';
+import { AGENT_TYPES_REGISTRY, AgentTypeKey } from '@/lib/saas/agent-types-registry';
 
-// GET /api/saas/agents?websiteId=xxx OR ?agentId=xxx OR no params (list all)
+// Helper to seed initial Agent records if needed
+async function ensureAgentRecordsSeeded() {
+  await ensureDefaultWebsitesSeeded();
+  const agentCount = await prisma.agent.count();
+  if (agentCount === 0) {
+    const websites = await prisma.website.findMany({
+      include: { agent: true }
+    });
+
+    for (const site of websites) {
+      // Create primary Blog Writer agent
+      await prisma.agent.create({
+        data: {
+          name: site.agent?.agentName || `${site.name} Blog Writer Agent`,
+          description: site.agent?.role || `Primary autonomous content and growth agent for ${site.name}`,
+          agentType: 'BLOG_WRITER',
+          websiteId: site.id,
+          status: site.agent?.active ? 'ACTIVE' : 'ACTIVE',
+          instructions: site.agent?.systemPrompt || `Research high-value search topics in ${site.niche} for ${site.targetCountry}. Produce comprehensive, research-backed guides with structured schema and verified affiliate links.`,
+          goals: 'Publish high-ranking commercial buying guides and product reviews weekly.',
+          targetCountry: site.targetCountry,
+          targetLanguage: site.targetLanguage,
+          targetAudience: site.targetAudience || 'Consumers seeking verified product advice',
+          categories: site.primaryTopics || JSON.stringify([site.niche]),
+          keywords: JSON.stringify(['best ' + site.niche.toLowerCase(), site.niche.toLowerCase() + ' review', site.niche.toLowerCase() + ' guide']),
+          tone: site.agent?.tone || 'Clear, helpful, practical, trustworthy',
+          contentRules: site.agent?.customRules || JSON.stringify({ minLength: 800, maxLength: 2500 }),
+          seoRules: JSON.stringify({ autoTitle: true, autoMeta: true, autoSchema: true }),
+          affiliateRules: JSON.stringify({ autoDisclosure: true, requireVerifiedLinks: true }),
+          publishingRules: JSON.stringify({ approvalMode: site.approvalMode }),
+          schedule: site.publishingFrequency || '3_PER_WEEK',
+          aiModel: 'gemini-2.5-flash',
+          tools: JSON.stringify(['ARTICLE_WRITER', 'PRODUCT_RESEARCH', 'IMAGE_VERIFIER', 'SCHEMA_GENERATOR', 'AFFILIATE_MAPPER']),
+          memoryState: site.agent?.memoryState || JSON.stringify({ brandVoice: site.brandVoice, coveredTopics: [] })
+        }
+      });
+
+      // Create an SEO & Traffic agent for TechPulse
+      if (site.slug === 'techpulse') {
+        await prisma.agent.create({
+          data: {
+            name: 'TechPulse SEO Intelligence Agent',
+            description: 'Autonomous keyword discovery, striking distance ranking opportunities, and competitor gap analysis',
+            agentType: 'SEO_TRAFFIC',
+            websiteId: site.id,
+            status: 'ACTIVE',
+            instructions: 'Analyze keyword search trends and Search Console queries in India to discover striking distance opportunities.',
+            goals: 'Find 15+ high-commercial intent topic opportunities weekly.',
+            targetCountry: 'India',
+            targetLanguage: 'English',
+            categories: JSON.stringify(['Smartphones', 'Earbuds', 'Laptops', 'Smartwatches']),
+            tone: 'Data-driven, analytical, and actionable',
+            schedule: 'DAILY',
+            aiModel: 'gemini-2.5-flash',
+            tools: JSON.stringify(['KEYWORD_RESEARCH', 'SEARCH_CONSOLE', 'COMPETITOR_ANALYSIS', 'INTERNAL_LINKER'])
+          }
+        });
+      }
+    }
+  }
+}
+
+// GET /api/saas/agents?websiteId=xxx&agentType=xxx&status=xxx
 export async function GET(request: Request) {
   try {
-    await ensureDefaultWebsitesSeeded();
+    await ensureAgentRecordsSeeded();
 
     const { searchParams } = new URL(request.url);
     const websiteId = searchParams.get('websiteId');
     const agentId = searchParams.get('agentId');
+    const agentType = searchParams.get('agentType');
+    const status = searchParams.get('status');
 
     // Case 1: Specific Agent by ID
     if (agentId) {
-      const agent = await prisma.websiteAgent.findUnique({
+      const agent = await prisma.agent.findUnique({
         where: { id: agentId },
         include: {
           website: {
             include: {
               integrations: true,
-              automationRules: true,
-              _count: {
-                select: {
-                  articles: true,
-                  topics: true,
-                  activityLogs: true
-                }
-              }
+              affiliatePlatforms: true
             }
+          },
+          runs: {
+            take: 5,
+            orderBy: { startedAt: 'desc' }
+          },
+          logs: {
+            take: 10,
+            orderBy: { createdAt: 'desc' }
           }
         }
       });
@@ -47,12 +113,15 @@ export async function GET(request: Request) {
       const rejectedCount = articles.filter(a => a.status === 'REJECTED').length;
       const totalViews = articles.reduce((acc, a) => acc + (a.views || 0), 0);
       const totalClicks = articles.reduce((acc, a) => acc + (a.affiliateClicks || 0), 0);
-      const avgQuality = generatedCount > 0 ? Math.round(articles.reduce((acc, a) => acc + (a.qualityScore || 85), 0) / generatedCount) : 88;
+      const avgQuality = generatedCount > 0 ? Math.round(articles.reduce((acc, a) => acc + (a.qualityScore || 85), 0) / generatedCount) : 90;
 
       return NextResponse.json({
         success: true,
         agent: {
           ...agent,
+          active: agent.status === 'ACTIVE',
+          agentName: agent.name,
+          role: agent.description || AGENT_TYPES_REGISTRY[agent.agentType as AgentTypeKey]?.defaultRole || 'AI Growth Agent',
           stats: {
             articlesGenerated: generatedCount,
             articlesPublished: publishedCount,
@@ -60,89 +129,37 @@ export async function GET(request: Request) {
             trafficCount: totalViews || agent.website.trafficCount || 0,
             affiliateClicks: totalClicks || agent.website.affiliateClicks || 0,
             averageQualityScore: avgQuality,
-            lastRun: agent.website.lastAgentRun || agent.updatedAt
+            lastRun: agent.runs[0]?.startedAt || agent.updatedAt
           }
         }
       });
     }
 
-    // Case 2: Specific Agent by Website ID
-    if (websiteId) {
-      const agent = await prisma.websiteAgent.findUnique({
-        where: { websiteId },
-        include: {
-          website: {
-            include: {
-              integrations: true,
-              automationRules: true,
-              _count: {
-                select: {
-                  articles: true,
-                  topics: true,
-                  activityLogs: true
-                }
-              }
-            }
-          }
-        }
-      });
+    // Case 2: Filtered Query / List All Agents
+    const whereClause: any = {};
+    if (websiteId) whereClause.websiteId = websiteId;
+    if (agentType && agentType !== 'ALL') whereClause.agentType = agentType;
+    if (status && status !== 'ALL') whereClause.status = status;
 
-      if (!agent) {
-        return NextResponse.json({ success: false, error: 'Agent not found for this website.' }, { status: 404 });
-      }
-
-      const articles = await prisma.contentArticle.findMany({
-        where: { websiteId },
-        select: { status: true, qualityScore: true, views: true, affiliateClicks: true }
-      });
-
-      const generatedCount = articles.length;
-      const publishedCount = articles.filter(a => a.status === 'PUBLISHED').length;
-      const rejectedCount = articles.filter(a => a.status === 'REJECTED').length;
-      const totalViews = articles.reduce((acc, a) => acc + (a.views || 0), 0);
-      const totalClicks = articles.reduce((acc, a) => acc + (a.affiliateClicks || 0), 0);
-      const avgQuality = generatedCount > 0 ? Math.round(articles.reduce((acc, a) => acc + (a.qualityScore || 85), 0) / generatedCount) : 88;
-
-      return NextResponse.json({
-        success: true,
-        agent: {
-          ...agent,
-          stats: {
-            articlesGenerated: generatedCount,
-            articlesPublished: publishedCount,
-            articlesRejected: rejectedCount,
-            trafficCount: totalViews || agent.website.trafficCount || 0,
-            affiliateClicks: totalClicks || agent.website.affiliateClicks || 0,
-            averageQualityScore: avgQuality,
-            lastRun: agent.website.lastAgentRun || agent.updatedAt
-          }
-        }
-      });
-    }
-
-    // Case 3: List ALL Agents across all websites
-    const allAgents = await prisma.websiteAgent.findMany({
+    const agents = await prisma.agent.findMany({
+      where: whereClause,
       include: {
         website: {
           include: {
             integrations: true,
-            automationRules: true,
-            _count: {
-              select: {
-                articles: true,
-                topics: true,
-                activityLogs: true
-              }
-            }
+            affiliatePlatforms: true
           }
+        },
+        runs: {
+          take: 1,
+          orderBy: { startedAt: 'desc' }
         }
       },
-      orderBy: { createdAt: 'asc' }
+      orderBy: { createdAt: 'desc' }
     });
 
-    // Populate real statistics per agent
     const agentsWithStats = await Promise.all(
-      allAgents.map(async (agent) => {
+      agents.map(async (agent) => {
         const articles = await prisma.contentArticle.findMany({
           where: { websiteId: agent.websiteId },
           select: { status: true, qualityScore: true, views: true, affiliateClicks: true }
@@ -153,10 +170,13 @@ export async function GET(request: Request) {
         const rejectedCount = articles.filter(a => a.status === 'REJECTED').length;
         const totalViews = articles.reduce((acc, a) => acc + (a.views || 0), 0);
         const totalClicks = articles.reduce((acc, a) => acc + (a.affiliateClicks || 0), 0);
-        const avgQuality = generatedCount > 0 ? Math.round(articles.reduce((acc, a) => acc + (a.qualityScore || 85), 0) / generatedCount) : 88;
+        const avgQuality = generatedCount > 0 ? Math.round(articles.reduce((acc, a) => acc + (a.qualityScore || 85), 0) / generatedCount) : 90;
 
         return {
           ...agent,
+          active: agent.status === 'ACTIVE',
+          agentName: agent.name,
+          role: agent.description || AGENT_TYPES_REGISTRY[agent.agentType as AgentTypeKey]?.defaultRole || 'AI Growth Agent',
           stats: {
             articlesGenerated: generatedCount,
             articlesPublished: publishedCount,
@@ -164,7 +184,7 @@ export async function GET(request: Request) {
             trafficCount: totalViews || agent.website.trafficCount || 0,
             affiliateClicks: totalClicks || agent.website.affiliateClicks || 0,
             averageQualityScore: avgQuality,
-            lastRun: agent.website.lastAgentRun || agent.updatedAt
+            lastRun: agent.runs[0]?.startedAt || agent.updatedAt
           }
         };
       })
@@ -177,17 +197,33 @@ export async function GET(request: Request) {
   }
 }
 
-// POST /api/saas/agents - Create Agent (with existing or new website)
+// POST /api/saas/agents - Create a new Agent (Multi-Agent architecture)
 export async function POST(request: Request) {
   try {
     const body = await request.json();
     const {
+      name,
       agentName,
-      role,
-      tone,
-      systemPrompt,
+      description,
+      agentType = 'BLOG_WRITER',
       websiteId,
-      // If creating website inline
+      status = 'ACTIVE',
+      instructions,
+      goals,
+      targetCountry,
+      targetLanguage,
+      targetAudience,
+      categories,
+      keywords,
+      tone,
+      contentRules,
+      seoRules,
+      affiliateRules,
+      publishingRules,
+      schedule,
+      aiModel = 'gemini-2.5-flash',
+      tools,
+      memoryState,
       newWebsite
     } = body;
 
@@ -224,37 +260,37 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'websiteId or newWebsite details are required.' }, { status: 400 });
     }
 
-    // Check if agent already exists for this website
-    const existingAgent = await prisma.websiteAgent.findUnique({
-      where: { websiteId: targetWebsiteId }
-    });
-
-    if (existingAgent) {
-      return NextResponse.json({ success: false, error: 'An agent is already configured for this website.' }, { status: 400 });
+    const website = await prisma.website.findUnique({ where: { id: targetWebsiteId } });
+    if (!website) {
+      return NextResponse.json({ success: false, error: 'Connected website not found.' }, { status: 404 });
     }
 
-    const website = await prisma.website.findUnique({ where: { id: targetWebsiteId } });
+    const typeDef = AGENT_TYPES_REGISTRY[agentType as AgentTypeKey] || AGENT_TYPES_REGISTRY.CUSTOM;
+    const finalName = name || agentName || `${website.name} ${typeDef.shortName} Agent`;
 
-    const createdAgent = await prisma.websiteAgent.create({
+    const createdAgent = await prisma.agent.create({
       data: {
+        name: finalName,
+        description: description || typeDef.defaultRole,
+        agentType,
         websiteId: targetWebsiteId,
-        agentName: agentName || `${website?.name || 'Website'} Growth Agent`,
-        role: role || `${website?.niche || 'General'} content, SEO, and growth optimization agent`,
-        tone: tone || 'Clear, helpful, practical, trustworthy',
-        systemPrompt: systemPrompt || `You are the dedicated AI Growth Agent for ${website?.name}. Research topics in the ${website?.niche} niche for ${website?.targetCountry}. Deliver high-converting, research-backed content without hallucinations.`,
-        memoryState: JSON.stringify({
-          brandVoice: website?.brandVoice || 'Clear, practical, trustworthy',
-          coveredTopics: [],
-          reviewedProducts: [],
-          affiliateRules: ['Disclose affiliate links clearly', 'Verify specifications'],
-          targetAudience: website?.targetAudience || `Consumers shopping in ${website?.niche}`
-        }),
-        customRules: JSON.stringify({
-          minWordCount: 800,
-          requireFaqSchema: true,
-          requireComparisonTable: true
-        }),
-        active: true
+        status,
+        instructions: instructions || typeDef.defaultSystemPrompt,
+        goals: goals || typeDef.defaultGoals,
+        targetCountry: targetCountry || website.targetCountry,
+        targetLanguage: targetLanguage || website.targetLanguage,
+        targetAudience: targetAudience || website.targetAudience || 'Value-focused shoppers',
+        categories: typeof categories === 'string' ? categories : JSON.stringify(categories || [website.niche]),
+        keywords: typeof keywords === 'string' ? keywords : JSON.stringify(keywords || []),
+        tone: tone || typeDef.defaultTone,
+        contentRules: typeof contentRules === 'string' ? contentRules : JSON.stringify(contentRules || { minLength: 800, maxLength: 2500 }),
+        seoRules: typeof seoRules === 'string' ? seoRules : JSON.stringify(seoRules || { autoTitle: true, autoMeta: true }),
+        affiliateRules: typeof affiliateRules === 'string' ? affiliateRules : JSON.stringify(affiliateRules || { autoDisclosure: true }),
+        publishingRules: typeof publishingRules === 'string' ? publishingRules : JSON.stringify(publishingRules || { approvalMode: website.approvalMode }),
+        schedule: schedule || typeDef.defaultSchedule,
+        aiModel,
+        tools: typeof tools === 'string' ? tools : JSON.stringify(tools || typeDef.recommendedTools),
+        memoryState: typeof memoryState === 'string' ? memoryState : JSON.stringify(memoryState || { brandVoice: website.brandVoice, coveredTopics: [] })
       },
       include: { website: true }
     });
@@ -263,9 +299,9 @@ export async function POST(request: Request) {
     await prisma.agentActivityLog.create({
       data: {
         websiteId: targetWebsiteId,
-        agentName: createdAgent.agentName,
+        agentName: createdAgent.name,
         actionType: 'AGENT_CREATED',
-        message: `Agent "${createdAgent.agentName}" initialized for ${website?.name}.`,
+        message: `Agent "${createdAgent.name}" (${typeDef.name}) initialized for ${website.name}.`,
         status: 'SUCCESS'
       }
     });
@@ -273,57 +309,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, agent: createdAgent });
   } catch (error: any) {
     console.error('Error creating agent:', error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
-  }
-}
-
-// PUT /api/saas/agents - Update Agent settings & memory
-export async function PUT(request: Request) {
-  try {
-    const body = await request.json();
-    const { websiteId, agentName, role, tone, systemPrompt, memoryState, customRules, active } = body;
-
-    if (!websiteId) {
-      return NextResponse.json({ success: false, error: 'websiteId is required.' }, { status: 400 });
+    let errorMessage = error.message || 'Failed to create agent.';
+    if (errorMessage.includes('DATABASE_URL') || errorMessage.includes('credentials') || errorMessage.includes('ADC')) {
+      errorMessage = 'Firestore database credentials (FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY) are missing in environment variables.';
     }
-
-    const updated = await prisma.websiteAgent.upsert({
-      where: { websiteId },
-      update: {
-        ...(agentName && { agentName }),
-        ...(role && { role }),
-        ...(tone && { tone }),
-        ...(systemPrompt !== undefined && { systemPrompt }),
-        ...(memoryState !== undefined && { memoryState: typeof memoryState === 'string' ? memoryState : JSON.stringify(memoryState) }),
-        ...(customRules !== undefined && { customRules: typeof customRules === 'string' ? customRules : JSON.stringify(customRules) }),
-        ...(active !== undefined && { active })
-      },
-      create: {
-        websiteId,
-        agentName: agentName || 'AI Growth Agent',
-        role: role || 'Content and Growth Agent',
-        tone: tone || 'Clear, helpful, practical, trustworthy',
-        systemPrompt,
-        memoryState: typeof memoryState === 'string' ? memoryState : JSON.stringify(memoryState || {}),
-        customRules: typeof customRules === 'string' ? customRules : JSON.stringify(customRules || {}),
-        active: active !== undefined ? active : true
-      },
-      include: { website: true }
-    });
-
-    // Log Activity
-    await prisma.agentActivityLog.create({
-      data: {
-        websiteId,
-        agentName: updated.agentName,
-        actionType: 'AGENT_UPDATE',
-        message: `Updated agent configuration, tone settings, and isolated memory state.`,
-        status: 'SUCCESS'
-      }
-    });
-
-    return NextResponse.json({ success: true, agent: updated });
-  } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return NextResponse.json({ success: false, error: errorMessage }, { status: 500 });
   }
 }

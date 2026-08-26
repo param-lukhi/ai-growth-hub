@@ -5,27 +5,29 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   Bot, ArrowLeft, ArrowRight, CheckCircle2, Globe, Sparkles,
-  Layers, ShoppingBag, ShieldCheck, Zap, RefreshCw, Check
+  Layers, ShoppingBag, ShieldCheck, Zap, RefreshCw, Check,
+  Search, FileText, BarChart2, Share2, PlaySquare, Instagram,
+  BookOpen, Sliders, DollarSign, Clock, Cpu, Eye
 } from 'lucide-react';
+import {
+  AGENT_TYPES_REGISTRY,
+  AgentTypeKey,
+  AVAILABLE_AGENT_TOOLS
+} from '@/lib/saas/agent-types-registry';
 
-const NICHES = [
-  'Technology', 'Automotive', 'Gaming', 'Finance', 'Fashion',
-  'Education', 'Home & Kitchen', 'Health & Fitness', 'Travel', 'Custom'
-];
-
-const CONTENT_TYPES = [
-  'Product Reviews', 'Comparisons', 'Buying Guides', 'How-To & Tutorials',
-  'Explainers', 'News & Updates', 'Trending Topics', 'Listicles & Round-ups'
-];
-
-const MONETIZATION_OPTIONS = [
-  { id: 'AMAZON_AFFILIATE', label: 'Amazon Affiliate Associates', desc: 'Auto tags, product spec boxes & disclaimer' },
-  { id: 'ADSENSE', label: 'Google AdSense / Display Ads', desc: 'In-article ad spaces & sticky header banners' },
-  { id: 'OTHER_AFFILIATE', label: 'Custom Affiliate Networks', desc: 'Direct affiliate links with cloaking' },
-  { id: 'DIGITAL_PRODUCTS', label: 'Digital Products & E-books', desc: 'Lead magnets and direct digital checkout' },
-  { id: 'SERVICES', label: 'Services & Consultations', desc: 'Lead generation and discovery call links' },
-  { id: 'SPONSORED_CONTENT', label: 'Sponsored Brand Partnerships', desc: 'Dedicated review badges & brand tags' }
-];
+const ICON_COMPONENTS: Record<string, any> = {
+  Search,
+  FileText,
+  ShoppingBag,
+  Layers,
+  Zap,
+  BarChart2,
+  Share2,
+  PlaySquare,
+  Instagram,
+  BookOpen,
+  Sliders
+};
 
 export default function CreateAgentWizardPage() {
   const router = useRouter();
@@ -33,45 +35,46 @@ export default function CreateAgentWizardPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [existingWebsites, setExistingWebsites] = useState<any[]>([]);
 
-  // Step 1: Basic Info
-  const [agentName, setAgentName] = useState('');
-  const [description, setDescription] = useState('');
-  const [role, setRole] = useState('Content & Growth Agent');
-  const [tone, setTone] = useState('Clear, helpful, practical, trustworthy');
-
-  // Step 2: Website Selection
-  const [websiteMode, setWebsiteMode] = useState<'existing' | 'new'>('new');
+  // Step 1: Website Selection
+  const [websiteMode, setWebsiteMode] = useState<'existing' | 'new'>('existing');
   const [selectedWebsiteId, setSelectedWebsiteId] = useState('');
   const [newSiteName, setNewSiteName] = useState('');
   const [newSiteUrl, setNewSiteUrl] = useState('');
+  const [newSiteNiche, setNewSiteNiche] = useState('Technology');
 
-  // Step 3: Niche
-  const [niche, setNiche] = useState('Technology');
-  const [customNiche, setCustomNiche] = useState('');
-  const [subNiche, setSubNiche] = useState('');
+  // Step 2: Select Agent Type
+  const [selectedAgentType, setSelectedAgentType] = useState<AgentTypeKey>('BLOG_WRITER');
 
-  // Step 4: Audience
+  // Step 3: Agent Configuration
+  const [agentName, setAgentName] = useState('');
+  const [description, setDescription] = useState('');
+  const [instructions, setInstructions] = useState('');
+  const [goals, setGoals] = useState('');
+  const [aiModel, setAiModel] = useState('gemini-2.5-flash');
+
+  // Step 4: Audience & Localization
   const [targetCountry, setTargetCountry] = useState('India');
   const [targetLanguage, setTargetLanguage] = useState('English');
   const [targetAudience, setTargetAudience] = useState('');
-  const [buyerType, setBuyerType] = useState('Value-focused tech shoppers & comparison researchers');
+  const [categoriesStr, setCategoriesStr] = useState('');
+  const [keywordsStr, setKeywordsStr] = useState('');
+  const [tone, setTone] = useState('Clear, helpful, practical, trustworthy');
 
-  // Step 5: Content Strategy
-  const [selectedContentTypes, setSelectedContentTypes] = useState<string[]>([
-    'Product Reviews', 'Comparisons', 'Buying Guides'
-  ]);
-  const [primaryTopics, setPrimaryTopics] = useState('');
-  const [topicsToAvoid, setTopicsToAvoid] = useState('');
+  // Step 5: Tools & Integrations
+  const [selectedTools, setSelectedTools] = useState<string[]>([]);
 
-  // Step 6: Monetization
-  const [selectedMonetization, setSelectedMonetization] = useState<string[]>([
-    'AMAZON_AFFILIATE', 'ADSENSE'
-  ]);
+  // Step 6: Affiliate Configuration
+  const [primaryAffiliatePlatform, setPrimaryAffiliatePlatform] = useState('AMAZON');
+  const [affiliateTag, setAffiliateTag] = useState('');
+  const [secondaryPlatforms, setSecondaryPlatforms] = useState<string[]>(['CUELINKS']);
+  const [requireVerifiedLinks, setRequireVerifiedLinks] = useState(true);
+  const [requireDisclosure, setRequireDisclosure] = useState(true);
 
-  // Step 7: Publishing Strategy
+  // Step 7: Automation & Schedule
+  const [schedule, setSchedule] = useState('3_PER_WEEK');
   const [approvalMode, setApprovalMode] = useState<'MANUAL' | 'SEMI_AUTOMATIC' | 'AUTOMATIC'>('MANUAL');
-  const [publishingFrequency, setPublishingFrequency] = useState('WEEKLY');
 
+  // Load existing websites
   useEffect(() => {
     fetch('/api/saas/websites')
       .then(res => res.json())
@@ -80,34 +83,83 @@ export default function CreateAgentWizardPage() {
           setExistingWebsites(data.websites);
           if (data.websites.length > 0) {
             setSelectedWebsiteId(data.websites[0].id);
+            setTargetCountry(data.websites[0].targetCountry || 'India');
+            setTargetLanguage(data.websites[0].targetLanguage || 'English');
+            setCategoriesStr(data.websites[0].niche || 'Technology');
+            setAffiliateTag(data.websites[0].slug === 'techpulse' ? 'techpulse-20' : `${data.websites[0].slug}-20`);
           }
         }
       })
       .catch(console.error);
   }, []);
 
-  const toggleContentType = (type: string) => {
-    setSelectedContentTypes(prev =>
-      prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type]
+  // When Agent Type changes, populate defaults
+  const handleSelectAgentType = (typeKey: AgentTypeKey) => {
+    setSelectedAgentType(typeKey);
+    const def = AGENT_TYPES_REGISTRY[typeKey];
+    if (def) {
+      const selectedWeb = existingWebsites.find(w => w.id === selectedWebsiteId);
+      const webName = websiteMode === 'new' ? (newSiteName || 'Website') : (selectedWeb?.name || 'Website');
+      setAgentName(`${webName} ${def.shortName} Agent`);
+      setDescription(def.description);
+      setInstructions(def.defaultSystemPrompt);
+      setGoals(def.defaultGoals);
+      setTone(def.defaultTone);
+      setSelectedTools(def.recommendedTools);
+      setSchedule(def.defaultSchedule);
+    }
+  };
+
+  const toggleTool = (toolId: string) => {
+    setSelectedTools(prev =>
+      prev.includes(toolId) ? prev.filter(t => t !== toolId) : [...prev, toolId]
     );
   };
 
-  const toggleMonetization = (id: string) => {
-    setSelectedMonetization(prev =>
-      prev.includes(id) ? prev.filter(m => m !== id) : [...prev, id]
+  const toggleSecondaryPlatform = (plat: string) => {
+    setSecondaryPlatforms(prev =>
+      prev.includes(plat) ? prev.filter(p => p !== plat) : [...prev, plat]
     );
   };
 
   const handleSubmit = async () => {
     try {
       setIsSubmitting(true);
-      const effectiveNiche = niche === 'Custom' ? customNiche : niche;
+      const parsedCategories = categoriesStr.split(',').map(s => s.trim()).filter(Boolean);
+      const parsedKeywords = keywordsStr.split(',').map(s => s.trim()).filter(Boolean);
 
       const payload: any = {
-        agentName: agentName || `${websiteMode === 'new' ? newSiteName : 'Growth'} Agent`,
-        role,
+        name: agentName,
+        description,
+        agentType: selectedAgentType,
+        status: 'ACTIVE',
+        instructions,
+        goals,
+        targetCountry,
+        targetLanguage,
+        targetAudience,
+        categories: parsedCategories,
+        keywords: parsedKeywords,
         tone,
-        systemPrompt: `You are the dedicated AI Growth Agent for ${websiteMode === 'new' ? newSiteName : 'your assigned property'}. Research high-ranking search topics in the ${effectiveNiche} niche for ${targetCountry}. Never hallucinate specifications, fake comments, or fake lab test results. Generate clean structured reviews, buying guides, and comparison tables with FTC-compliant affiliate disclosures.`
+        contentRules: { minLength: 800, maxLength: 2500 },
+        seoRules: { autoTitle: true, autoMeta: true, autoSchema: true },
+        affiliateRules: {
+          primaryPlatform: primaryAffiliatePlatform,
+          secondaryPlatforms,
+          affiliateTag,
+          requireVerifiedLinks,
+          requireDisclosure
+        },
+        publishingRules: { approvalMode },
+        schedule,
+        aiModel,
+        tools: selectedTools,
+        memoryState: {
+          brandVoice: tone,
+          coveredTopics: [],
+          targetAudience,
+          preferredCategories: parsedCategories
+        }
       };
 
       if (websiteMode === 'existing' && selectedWebsiteId) {
@@ -116,17 +168,11 @@ export default function CreateAgentWizardPage() {
         payload.newWebsite = {
           name: newSiteName || agentName,
           domainUrl: newSiteUrl || 'https://example.com',
-          niche: effectiveNiche,
-          subNiche: subNiche || null,
+          niche: newSiteNiche || 'Technology',
           targetCountry,
           targetLanguage,
-          targetAudience: targetAudience || buyerType,
-          brandVoice: tone,
-          contentStyle: selectedContentTypes.join(', '),
-          primaryTopics: primaryTopics ? primaryTopics.split(',').map(s => s.trim()) : [],
-          topicsToAvoid: topicsToAvoid ? topicsToAvoid.split(',').map(s => s.trim()) : [],
-          monetization: selectedMonetization,
-          publishingFrequency,
+          targetAudience,
+          publishingFrequency: schedule,
           approvalMode
         };
       }
@@ -152,14 +198,13 @@ export default function CreateAgentWizardPage() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6 pb-20">
-      
-      {/* Top Navigation */}
+    <div className="max-w-5xl mx-auto space-y-6 pb-24">
+      {/* Top Bar Navigation */}
       <div className="flex items-center justify-between border-b border-neutral-200 dark:border-neutral-800 pb-4">
         <div className="flex items-center gap-3">
           <Link
             href="/admin/agents"
-            className="p-2 rounded-xl bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-600 dark:text-neutral-300 hover:text-neutral-900"
+            className="p-2.5 rounded-xl bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
           </Link>
@@ -169,230 +214,273 @@ export default function CreateAgentWizardPage() {
               <span>Create New AI Growth Agent</span>
             </h1>
             <p className="text-xs text-neutral-400 mt-0.5">
-              Step {currentStep} of 8 — Multi-Tenant Agent Setup Wizard
+              Step {currentStep} of 8 — Multi-Agent Multi-Website Configuration Wizard
             </p>
           </div>
         </div>
 
         <div className="text-xs font-extrabold text-neutral-400">
-          {Math.round((currentStep / 8) * 100)}% Complete
+          Step {currentStep} / 8 ({Math.round((currentStep / 8) * 100)}%)
         </div>
       </div>
 
-      {/* Progress Bar */}
+      {/* Progress Track */}
       <div className="w-full h-1.5 bg-neutral-100 dark:bg-neutral-800 rounded-full overflow-hidden">
         <div
-          className="h-full bg-gradient-to-r from-brand-600 to-indigo-600 transition-all duration-300 rounded-full"
+          className="h-full bg-gradient-to-r from-brand-600 via-indigo-600 to-teal-500 transition-all duration-300 rounded-full"
           style={{ width: `${(currentStep / 8) * 100}%` }}
         />
       </div>
 
       {/* STEP CONTAINER */}
       <div className="p-6 sm:p-8 rounded-3xl bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 shadow-soft space-y-6">
-        
-        {/* STEP 1: Basic Information */}
+
+        {/* STEP 1: Select Website */}
         {currentStep === 1 && (
-          <div className="space-y-4 animate-in fade-in duration-200">
+          <div className="space-y-4 animate-in fade-in duration-150">
             <div>
-              <h2 className="text-base font-black text-neutral-900 dark:text-white">
-                Step 1: Agent Identification & Brand Voice
+              <h2 className="text-base font-black text-neutral-900 dark:text-white flex items-center gap-2">
+                <Globe className="w-5 h-5 text-brand-500" />
+                <span>Step 1: Select Connected Website</span>
               </h2>
               <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
-                Name your agent and define its primary role and tone of voice.
+                Choose the website property this Agent will manage. Agents maintain strictly isolated memory and data per website.
               </p>
             </div>
 
-            <div className="space-y-3 text-xs">
-              <div>
-                <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1">Agent Name *</label>
-                <input
-                  type="text"
-                  placeholder="e.g. CarCareMakers Growth Agent / TechPulse Reviewer"
-                  value={agentName}
-                  onChange={(e) => setAgentName(e.target.value)}
-                  className="w-full p-3 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 outline-none focus:border-brand-500 font-bold"
-                />
-              </div>
-
-              <div>
-                <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1">Agent Role & Mission</label>
-                <input
-                  type="text"
-                  value={role}
-                  onChange={(e) => setRole(e.target.value)}
-                  className="w-full p-3 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 outline-none focus:border-brand-500"
-                />
-              </div>
-
-              <div>
-                <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1">Brand Voice & Writing Tone</label>
-                <input
-                  type="text"
-                  value={tone}
-                  onChange={(e) => setTone(e.target.value)}
-                  className="w-full p-3 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 outline-none focus:border-brand-500"
-                />
-              </div>
-
-              <div>
-                <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1">Description</label>
-                <textarea
-                  rows={2}
-                  placeholder="Optional internal notes regarding this agent..."
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  className="w-full p-3 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 outline-none focus:border-brand-500"
-                />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* STEP 2: Website Selection */}
-        {currentStep === 2 && (
-          <div className="space-y-4 animate-in fade-in duration-200">
-            <div>
-              <h2 className="text-base font-black text-neutral-900 dark:text-white">
-                Step 2: Connect Dedicated Website
-              </h2>
-              <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
-                Each website has its own strictly isolated agent, topics, and memory.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3 text-xs">
-              <button
-                type="button"
-                onClick={() => setWebsiteMode('new')}
-                className={`p-4 rounded-2xl border text-left transition-all ${
-                  websiteMode === 'new'
-                    ? 'border-brand-500 bg-brand-50/50 dark:bg-brand-950/40 text-brand-900 dark:text-brand-300 font-extrabold shadow-xs'
-                    : 'border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50'
-                }`}
-              >
-                <div className="text-sm font-black">+ Add New Website</div>
-                <div className="text-[11px] text-neutral-400 mt-0.5">Register a new property for this agent</div>
-              </button>
-
+            <div className="grid grid-cols-2 gap-3 text-xs pt-2">
               <button
                 type="button"
                 onClick={() => setWebsiteMode('existing')}
                 disabled={existingWebsites.length === 0}
                 className={`p-4 rounded-2xl border text-left transition-all ${
                   websiteMode === 'existing'
-                    ? 'border-brand-500 bg-brand-50/50 dark:bg-brand-950/40 text-brand-900 dark:text-brand-300 font-extrabold shadow-xs'
-                    : 'border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 disabled:opacity-50'
+                    ? 'border-brand-500 bg-brand-50/60 dark:bg-brand-950/40 text-brand-900 dark:text-brand-200 font-extrabold shadow-xs'
+                    : 'border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-800'
                 }`}
               >
                 <div className="text-sm font-black">Select Existing Website</div>
-                <div className="text-[11px] text-neutral-400 mt-0.5">Connect to an existing unassigned website</div>
+                <div className="text-[11px] text-neutral-400 mt-0.5">Assign agent to a connected property</div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setWebsiteMode('new')}
+                className={`p-4 rounded-2xl border text-left transition-all ${
+                  websiteMode === 'new'
+                    ? 'border-brand-500 bg-brand-50/60 dark:bg-brand-950/40 text-brand-900 dark:text-brand-200 font-extrabold shadow-xs'
+                    : 'border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-800'
+                }`}
+              >
+                <div className="text-sm font-black">+ Connect New Website</div>
+                <div className="text-[11px] text-neutral-400 mt-0.5">Register a brand-new website property</div>
               </button>
             </div>
 
-            {websiteMode === 'new' ? (
+            {websiteMode === 'existing' ? (
               <div className="space-y-3 text-xs pt-2">
-                <div>
-                  <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1">Website / Brand Name *</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. CarCareMakers"
-                    value={newSiteName}
-                    onChange={(e) => setNewSiteName(e.target.value)}
-                    className="w-full p-3 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 outline-none focus:border-brand-500 font-bold"
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1">Website Domain URL *</label>
-                  <input
-                    type="url"
-                    placeholder="https://carcaremakers.com"
-                    value={newSiteUrl}
-                    onChange={(e) => setNewSiteUrl(e.target.value)}
-                    className="w-full p-3 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 outline-none focus:border-brand-500"
-                  />
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-3 text-xs pt-2">
-                <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1">Select Property</label>
+                <label className="block font-bold text-neutral-700 dark:text-neutral-300">Choose Website</label>
                 <select
                   value={selectedWebsiteId}
-                  onChange={(e) => setSelectedWebsiteId(e.target.value)}
-                  className="w-full p-3 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 font-bold outline-none"
+                  onChange={(e) => {
+                    setSelectedWebsiteId(e.target.value);
+                    const selected = existingWebsites.find(w => w.id === e.target.value);
+                    if (selected) {
+                      setTargetCountry(selected.targetCountry || 'India');
+                      setTargetLanguage(selected.targetLanguage || 'English');
+                      setCategoriesStr(selected.niche || 'Technology');
+                    }
+                  }}
+                  className="w-full p-3.5 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 font-bold outline-none"
                 >
                   {existingWebsites.map(w => (
-                    <option key={w.id} value={w.id}>{w.name} ({w.domainUrl}) - {w.niche}</option>
+                    <option key={w.id} value={w.id}>
+                      {w.name} ({w.domainUrl}) — {w.niche} ({w.targetCountry})
+                    </option>
                   ))}
                 </select>
               </div>
+            ) : (
+              <div className="space-y-3 text-xs pt-2">
+                <div>
+                  <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1">Website Name *</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. SmartLivingHub"
+                    value={newSiteName}
+                    onChange={(e) => setNewSiteName(e.target.value)}
+                    className="w-full p-3 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 font-bold outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1">Domain URL *</label>
+                  <input
+                    type="url"
+                    placeholder="https://smartlivinghub.com"
+                    value={newSiteUrl}
+                    onChange={(e) => setNewSiteUrl(e.target.value)}
+                    className="w-full p-3 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1">Niche Category</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Home Appliances & Smart Tech"
+                    value={newSiteNiche}
+                    onChange={(e) => setNewSiteNiche(e.target.value)}
+                    className="w-full p-3 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 outline-none"
+                  />
+                </div>
+              </div>
             )}
           </div>
         )}
 
-        {/* STEP 3: Niche & Category */}
-        {currentStep === 3 && (
-          <div className="space-y-4 animate-in fade-in duration-200">
+        {/* STEP 2: Select Agent Type */}
+        {currentStep === 2 && (
+          <div className="space-y-4 animate-in fade-in duration-150">
             <div>
-              <h2 className="text-base font-black text-neutral-900 dark:text-white">
-                Step 3: Target Niche & Category Models
+              <h2 className="text-base font-black text-neutral-900 dark:text-white flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-amber-500" />
+                <span>Step 2: Select Agent Type</span>
               </h2>
               <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
-                The agent will load specific technical specification schemas for this category.
+                Choose the specialized intelligence model and workflow for this agent.
               </p>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs">
-              {NICHES.map(n => (
-                <button
-                  key={n}
-                  type="button"
-                  onClick={() => setNiche(n)}
-                  className={`p-3 rounded-xl border text-center font-bold transition-all ${
-                    niche === n
-                      ? 'border-brand-500 bg-brand-50 text-brand-700 dark:bg-brand-950 dark:text-brand-300 shadow-xs'
-                      : 'border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50'
-                  }`}
-                >
-                  {n}
-                </button>
-              ))}
-            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 text-xs pt-1">
+              {(Object.keys(AGENT_TYPES_REGISTRY) as AgentTypeKey[]).map(typeKey => {
+                const def = AGENT_TYPES_REGISTRY[typeKey];
+                const IconComponent = ICON_COMPONENTS[def.iconName] || Bot;
+                const isSelected = selectedAgentType === typeKey;
 
-            {niche === 'Custom' && (
-              <div className="pt-2 text-xs">
-                <label className="block font-bold text-neutral-700 mb-1">Custom Niche Name</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Drone Photography & Videography"
-                  value={customNiche}
-                  onChange={(e) => setCustomNiche(e.target.value)}
-                  className="w-full p-3 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 outline-none"
-                />
-              </div>
-            )}
+                return (
+                  <div
+                    key={typeKey}
+                    onClick={() => handleSelectAgentType(typeKey)}
+                    className={`p-4 rounded-2xl border cursor-pointer transition-all flex flex-col justify-between space-y-3 ${
+                      isSelected
+                        ? 'border-brand-500 bg-brand-50/70 dark:bg-brand-950/50 shadow-md ring-2 ring-brand-500/20'
+                        : 'border-neutral-200 dark:border-neutral-800 hover:border-neutral-300 hover:bg-neutral-50/60 dark:hover:bg-neutral-800/40'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2.5">
+                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold ${
+                          isSelected
+                            ? 'bg-brand-600 text-white'
+                            : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300'
+                        }`}>
+                          <IconComponent className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <h3 className="font-extrabold text-xs text-neutral-900 dark:text-white">{def.name}</h3>
+                          <span className="text-[10px] text-neutral-400 font-medium">{def.defaultSchedule} Schedule</span>
+                        </div>
+                      </div>
 
-            <div className="pt-2 text-xs">
-              <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1">Sub-Niche or Product Focus</label>
-              <input
-                type="text"
-                placeholder="e.g. Car Cleaning, Tyre Inflators, Dash Cams, Ceramic Coatings"
-                value={subNiche}
-                onChange={(e) => setSubNiche(e.target.value)}
-                className="w-full p-3 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 outline-none"
-              />
+                      {isSelected && (
+                        <CheckCircle2 className="w-4 h-4 text-brand-600 shrink-0" />
+                      )}
+                    </div>
+
+                    <p className="text-[11px] text-neutral-500 dark:text-neutral-400 line-clamp-2 leading-relaxed">
+                      {def.description}
+                    </p>
+
+                    <div className="pt-2 border-t border-neutral-100 dark:border-neutral-800 text-[10px] text-neutral-400">
+                      <strong>Key Capability:</strong> {def.responsibilities[0]}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
 
-        {/* STEP 4: Audience & Demographics */}
-        {currentStep === 4 && (
-          <div className="space-y-4 animate-in fade-in duration-200">
+        {/* STEP 3: Agent Configuration */}
+        {currentStep === 3 && (
+          <div className="space-y-4 animate-in fade-in duration-150">
             <div>
-              <h2 className="text-base font-black text-neutral-900 dark:text-white">
-                Step 4: Target Audience & Geo Localization
+              <h2 className="text-base font-black text-neutral-900 dark:text-white flex items-center gap-2">
+                <Sliders className="w-5 h-5 text-indigo-500" />
+                <span>Step 3: Agent Configuration & Persona</span>
               </h2>
               <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
-                Calibrate regional currency, search terminology, and buyer profile.
+                Customize instructions, goals, and AI model parameters for <strong>{AGENT_TYPES_REGISTRY[selectedAgentType]?.name}</strong>.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+              <div>
+                <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1">Agent Name *</label>
+                <input
+                  type="text"
+                  value={agentName}
+                  onChange={(e) => setAgentName(e.target.value)}
+                  className="w-full p-3 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 font-bold outline-none focus:border-brand-500"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1">AI Model Engine</label>
+                <select
+                  value={aiModel}
+                  onChange={(e) => setAiModel(e.target.value)}
+                  className="w-full p-3 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 font-bold outline-none"
+                >
+                  <option value="gemini-2.5-flash">Gemini 2.5 Flash (Fast & Research Optimized)</option>
+                  <option value="gemini-2.5-pro">Gemini 2.5 Pro (Deep Technical Reasoning)</option>
+                  <option value="gpt-4o">GPT-4o (OpenAI High-Precision)</option>
+                  <option value="claude-3-5-sonnet">Claude 3.5 Sonnet (Editorial Excellence)</option>
+                </select>
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1">Role / Description</label>
+                <input
+                  type="text"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  className="w-full p-3 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 outline-none"
+                />
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1">Instructions / System Prompt *</label>
+                <textarea
+                  rows={4}
+                  value={instructions}
+                  onChange={(e) => setInstructions(e.target.value)}
+                  className="w-full p-3 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 font-mono text-[11px] outline-none focus:border-brand-500"
+                />
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1">Agent Primary Goals</label>
+                <input
+                  type="text"
+                  value={goals}
+                  onChange={(e) => setGoals(e.target.value)}
+                  className="w-full p-3 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 outline-none"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* STEP 4: Audience */}
+        {currentStep === 4 && (
+          <div className="space-y-4 animate-in fade-in duration-150">
+            <div>
+              <h2 className="text-base font-black text-neutral-900 dark:text-white flex items-center gap-2">
+                <Globe className="w-5 h-5 text-emerald-500" />
+                <span>Step 4: Target Audience & Geo Localization</span>
+              </h2>
+              <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
+                Configure regional market context, target currency, keywords, and tone.
               </p>
             </div>
 
@@ -416,15 +504,46 @@ export default function CreateAgentWizardPage() {
                   className="w-full p-3 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 font-bold outline-none"
                 />
               </div>
-            </div>
 
-            <div className="text-xs space-y-3">
-              <div>
-                <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1">Primary Buyer Profile</label>
+              <div className="sm:col-span-2">
+                <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1">Target Audience Profile</label>
                 <input
                   type="text"
-                  value={buyerType}
-                  onChange={(e) => setBuyerType(e.target.value)}
+                  placeholder="e.g. Value-conscious tech shoppers in Tier 1 & Tier 2 Indian cities"
+                  value={targetAudience}
+                  onChange={(e) => setTargetAudience(e.target.value)}
+                  className="w-full p-3 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1">Categories (comma separated)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Wireless Earbuds, Smartwatches, Laptops"
+                  value={categoriesStr}
+                  onChange={(e) => setCategoriesStr(e.target.value)}
+                  className="w-full p-3 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1">Priority Keywords (comma separated)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. best under 2000, review, vs comparison"
+                  value={keywordsStr}
+                  onChange={(e) => setKeywordsStr(e.target.value)}
+                  className="w-full p-3 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 outline-none"
+                />
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1">Tone & Voice</label>
+                <input
+                  type="text"
+                  value={tone}
+                  onChange={(e) => setTone(e.target.value)}
                   className="w-full p-3 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 outline-none"
                 />
               </div>
@@ -432,211 +551,242 @@ export default function CreateAgentWizardPage() {
           </div>
         )}
 
-        {/* STEP 5: Content Strategy */}
+        {/* STEP 5: Tools & Integrations */}
         {currentStep === 5 && (
-          <div className="space-y-4 animate-in fade-in duration-200">
+          <div className="space-y-4 animate-in fade-in duration-150">
             <div>
-              <h2 className="text-base font-black text-neutral-900 dark:text-white">
-                Step 5: Content Formats & Strategy
+              <h2 className="text-base font-black text-neutral-900 dark:text-white flex items-center gap-2">
+                <Cpu className="w-5 h-5 text-teal-500" />
+                <span>Step 5: Agent Tools & Capabilities</span>
               </h2>
               <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
-                Select which content frameworks this agent is permitted to generate.
+                Select which specific tools this Agent is authorized to invoke.
               </p>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
-              {CONTENT_TYPES.map(type => {
-                const isSelected = selectedContentTypes.includes(type);
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs pt-1">
+              {AVAILABLE_AGENT_TOOLS.map(tool => {
+                const isSelected = selectedTools.includes(tool.id);
                 return (
-                  <button
-                    key={type}
-                    type="button"
-                    onClick={() => toggleContentType(type)}
-                    className={`p-3 rounded-xl border text-center font-bold transition-all flex items-center justify-center gap-1.5 ${
-                      isSelected
-                        ? 'border-brand-500 bg-brand-50 text-brand-700 dark:bg-brand-950 dark:text-brand-300 shadow-xs'
-                        : 'border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 text-neutral-600'
-                    }`}
-                  >
-                    {isSelected && <Check className="w-3.5 h-3.5" />}
-                    <span>{type}</span>
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs pt-2">
-              <div>
-                <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1">Primary Topics to Prioritize</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Dash Cams, Ceramic Sprays, Vacuum Cleaners"
-                  value={primaryTopics}
-                  onChange={(e) => setPrimaryTopics(e.target.value)}
-                  className="w-full p-3 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1">Topics / Keywords to Avoid</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Unverified rumors, low-margin products"
-                  value={topicsToAvoid}
-                  onChange={(e) => setTopicsToAvoid(e.target.value)}
-                  className="w-full p-3 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 outline-none"
-                />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* STEP 6: Monetization */}
-        {currentStep === 6 && (
-          <div className="space-y-4 animate-in fade-in duration-200">
-            <div>
-              <h2 className="text-base font-black text-neutral-900 dark:text-white">
-                Step 6: Monetization Channels
-              </h2>
-              <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
-                Configure monetization hooks and required compliance notices.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-              {MONETIZATION_OPTIONS.map(opt => {
-                const isSelected = selectedMonetization.includes(opt.id);
-                return (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    onClick={() => toggleMonetization(opt.id)}
-                    className={`p-4 rounded-2xl border text-left transition-all ${
+                  <div
+                    key={tool.id}
+                    onClick={() => toggleTool(tool.id)}
+                    className={`p-3.5 rounded-2xl border cursor-pointer transition-all flex items-start gap-3 ${
                       isSelected
                         ? 'border-brand-500 bg-brand-50/70 dark:bg-brand-950/40 text-brand-900 dark:text-brand-200 shadow-xs'
-                        : 'border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50'
+                        : 'border-neutral-200 dark:border-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-800/60'
                     }`}
                   >
-                    <div className="flex items-center justify-between font-black text-xs">
-                      <span>{opt.label}</span>
-                      {isSelected ? <CheckCircle2 className="w-4 h-4 text-brand-600" /> : <div className="w-4 h-4 rounded-full border border-neutral-300" />}
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => {}}
+                      className="w-4 h-4 mt-0.5 accent-brand-600 rounded shrink-0 pointer-events-none"
+                    />
+                    <div>
+                      <div className="font-extrabold text-neutral-900 dark:text-white">{tool.name}</div>
+                      <div className="text-[11px] text-neutral-500 dark:text-neutral-400 mt-0.5">{tool.description}</div>
                     </div>
-                    <div className="text-[11px] text-neutral-400 mt-1">{opt.desc}</div>
-                  </button>
+                  </div>
                 );
               })}
             </div>
           </div>
         )}
 
-        {/* STEP 7: Publishing & Governance */}
-        {currentStep === 7 && (
-          <div className="space-y-4 animate-in fade-in duration-200">
+        {/* STEP 6: Affiliate Configuration */}
+        {currentStep === 6 && (
+          <div className="space-y-4 animate-in fade-in duration-150">
             <div>
-              <h2 className="text-base font-black text-neutral-900 dark:text-white">
-                Step 7: Publishing Governance & Frequency
+              <h2 className="text-base font-black text-neutral-900 dark:text-white flex items-center gap-2">
+                <DollarSign className="w-5 h-5 text-emerald-500" />
+                <span>Step 6: Multi-Affiliate Configuration</span>
               </h2>
               <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
-                Default: Manual Approval is active for human review before live deployment.
+                Connect multi-affiliate platforms without hardcoding. Supported: Amazon, Flipkart, Cuelinks, vCommission, and Impact.
               </p>
             </div>
 
-            <div className="space-y-3 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
               <div>
-                <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1.5">Approval Mode</label>
-                <div className="grid grid-cols-3 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setApprovalMode('MANUAL')}
-                    className={`p-3 rounded-xl border text-center font-extrabold ${approvalMode === 'MANUAL' ? 'border-brand-500 bg-brand-50 text-brand-700 dark:bg-brand-950 dark:text-brand-300' : 'border-neutral-200 hover:bg-neutral-50'}`}
-                  >
-                    <div>Manual Approval</div>
-                    <div className="text-[10px] font-normal text-neutral-400">(Recommended)</div>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setApprovalMode('SEMI_AUTOMATIC')}
-                    className={`p-3 rounded-xl border text-center font-extrabold ${approvalMode === 'SEMI_AUTOMATIC' ? 'border-brand-500 bg-brand-50 text-brand-700 dark:bg-brand-950 dark:text-brand-300' : 'border-neutral-200 hover:bg-neutral-50'}`}
-                  >
-                    <div>Semi-Automatic</div>
-                    <div className="text-[10px] font-normal text-neutral-400">(Quality score &gt; 90)</div>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setApprovalMode('AUTOMATIC')}
-                    className={`p-3 rounded-xl border text-center font-extrabold ${approvalMode === 'AUTOMATIC' ? 'border-brand-500 bg-brand-50 text-brand-700 dark:bg-brand-950 dark:text-brand-300' : 'border-neutral-200 hover:bg-neutral-50'}`}
-                  >
-                    <div>Automatic</div>
-                    <div className="text-[10px] font-normal text-neutral-400">(Direct Auto-Publish)</div>
-                  </button>
+                <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1">Primary Affiliate Network</label>
+                <select
+                  value={primaryAffiliatePlatform}
+                  onChange={(e) => setPrimaryAffiliatePlatform(e.target.value)}
+                  className="w-full p-3 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 font-bold outline-none"
+                >
+                  <option value="AMAZON">Amazon Associates (Primary)</option>
+                  <option value="FLIPKART">Flipkart Affiliate (Primary)</option>
+                  <option value="CUELINKS">Cuelinks Automated Redirects</option>
+                  <option value="VCOMMISSION">vCommission Direct Campaigns</option>
+                  <option value="IMPACT">impact.com Partnership Platform</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1">Primary Tracking ID / Tag</label>
+                <input
+                  type="text"
+                  placeholder="e.g. techpulse-20 or affiliate_id"
+                  value={affiliateTag}
+                  onChange={(e) => setAffiliateTag(e.target.value)}
+                  className="w-full p-3 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 font-bold outline-none"
+                />
+              </div>
+
+              <div className="sm:col-span-2 space-y-2">
+                <label className="block font-bold text-neutral-700 dark:text-neutral-300">Secondary Affiliate Platforms (Multi-Store Price Buttons)</label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {['FLIPKART', 'CUELINKS', 'VCOMMISSION', 'IMPACT'].map(plat => (
+                    <button
+                      key={plat}
+                      type="button"
+                      onClick={() => toggleSecondaryPlatform(plat)}
+                      className={`p-2.5 rounded-xl border text-center font-bold text-xs transition-all ${
+                        secondaryPlatforms.includes(plat)
+                          ? 'border-brand-500 bg-brand-50 text-brand-700 dark:bg-brand-950 dark:text-brand-300 shadow-2xs'
+                          : 'border-neutral-200 dark:border-neutral-800 text-neutral-500 hover:bg-neutral-50'
+                      }`}
+                    >
+                      {plat}
+                    </button>
+                  ))}
                 </div>
               </div>
 
+              <div className="sm:col-span-2 space-y-3 pt-2">
+                <label className="flex items-center gap-3 p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={requireVerifiedLinks}
+                    onChange={(e) => setRequireVerifiedLinks(e.target.checked)}
+                    className="w-4 h-4 accent-brand-600 rounded"
+                  />
+                  <div>
+                    <div className="font-extrabold text-neutral-900 dark:text-white">Enforce Verified Affiliate Links Only</div>
+                    <div className="text-neutral-400">Never invent fake affiliate links. If unverified, mark "Affiliate Link Required".</div>
+                  </div>
+                </label>
+
+                <label className="flex items-center gap-3 p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={requireDisclosure}
+                    onChange={(e) => setRequireDisclosure(e.target.checked)}
+                    className="w-4 h-4 accent-brand-600 rounded"
+                  />
+                  <div>
+                    <div className="font-extrabold text-neutral-900 dark:text-white">Mandatory FTC & Amazon Affiliate Disclosure</div>
+                    <div className="text-neutral-400">Automatically attach compliant disclosure notice on every generated article.</div>
+                  </div>
+                </label>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* STEP 7: Automation */}
+        {currentStep === 7 && (
+          <div className="space-y-4 animate-in fade-in duration-150">
+            <div>
+              <h2 className="text-base font-black text-neutral-900 dark:text-white flex items-center gap-2">
+                <Clock className="w-5 h-5 text-indigo-500" />
+                <span>Step 7: Automation & Human Review</span>
+              </h2>
+              <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
+                Configure execution frequency and approval policy.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
               <div>
-                <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1">Target Publishing Cadence</label>
+                <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1">Execution Schedule</label>
                 <select
-                  value={publishingFrequency}
-                  onChange={(e) => setPublishingFrequency(e.target.value)}
+                  value={schedule}
+                  onChange={(e) => setSchedule(e.target.value)}
                   className="w-full p-3 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 font-bold outline-none"
                 >
-                  <option value="DAILY">Daily (7 articles / week)</option>
-                  <option value="3_PER_WEEK">3 articles per week</option>
-                  <option value="WEEKLY">Weekly (1 high-depth pillar / week)</option>
-                  <option value="CUSTOM">Custom on-demand manual trigger</option>
+                  <option value="MANUAL">Manual Run Only</option>
+                  <option value="DAILY">Daily (7 times / week)</option>
+                  <option value="3_PER_WEEK">3 Times per Week</option>
+                  <option value="WEEKLY">Weekly (1 time / week)</option>
+                  <option value="MONTHLY">Monthly</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-bold text-neutral-700 dark:text-neutral-300 mb-1">Human Approval Mode</label>
+                <select
+                  value={approvalMode}
+                  onChange={(e) => setApprovalMode(e.target.value as any)}
+                  className="w-full p-3 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 font-bold outline-none"
+                >
+                  <option value="MANUAL">Manual Approval (Default & Recommended)</option>
+                  <option value="SEMI_AUTOMATIC">Semi-Automatic (Auto-approve if Quality &gt; 90)</option>
+                  <option value="AUTOMATIC">Fully Automatic</option>
                 </select>
               </div>
             </div>
           </div>
         )}
 
-        {/* STEP 8: Summary & Initialization */}
+        {/* STEP 8: Review & Create */}
         {currentStep === 8 && (
-          <div className="space-y-4 animate-in fade-in duration-200">
+          <div className="space-y-4 animate-in fade-in duration-150">
             <div>
-              <h2 className="text-base font-black text-neutral-900 dark:text-white">
-                Step 8: Review & Calibrate AI Agent
+              <h2 className="text-base font-black text-neutral-900 dark:text-white flex items-center gap-2">
+                <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+                <span>Step 8: Review & Launch Agent</span>
               </h2>
               <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
-                Verify configuration parameters before launching the isolated agent.
+                Review all configuration parameters before initializing this autonomous Agent.
               </p>
             </div>
 
-            <div className="p-4 rounded-2xl bg-neutral-50 dark:bg-neutral-800/60 border border-neutral-200 dark:border-neutral-700 space-y-2 text-xs">
+            <div className="p-5 rounded-2xl bg-neutral-50 dark:bg-neutral-800/60 border border-neutral-200 dark:border-neutral-700 space-y-2.5 text-xs">
               <div className="flex justify-between py-1 border-b border-neutral-200/60 dark:border-neutral-700/60">
-                <span className="text-neutral-400">Agent Name:</span>
-                <span className="font-extrabold text-neutral-900 dark:text-white">{agentName || 'Growth Agent'}</span>
+                <span className="text-neutral-400 font-bold">Agent Name:</span>
+                <span className="font-extrabold text-neutral-900 dark:text-white">{agentName}</span>
               </div>
               <div className="flex justify-between py-1 border-b border-neutral-200/60 dark:border-neutral-700/60">
-                <span className="text-neutral-400">Website Property:</span>
-                <span className="font-extrabold text-neutral-900 dark:text-white">{websiteMode === 'new' ? newSiteName : 'Connected Property'}</span>
+                <span className="text-neutral-400 font-bold">Agent Type:</span>
+                <span className="font-extrabold text-brand-600 dark:text-brand-400">{AGENT_TYPES_REGISTRY[selectedAgentType]?.name}</span>
               </div>
               <div className="flex justify-between py-1 border-b border-neutral-200/60 dark:border-neutral-700/60">
-                <span className="text-neutral-400">Niche / Geo:</span>
-                <span className="font-extrabold text-neutral-900 dark:text-white">{niche} • {targetCountry} ({targetLanguage})</span>
+                <span className="text-neutral-400 font-bold">Connected Property:</span>
+                <span className="font-extrabold text-neutral-900 dark:text-white">{websiteMode === 'new' ? newSiteName : 'Selected Website'}</span>
               </div>
               <div className="flex justify-between py-1 border-b border-neutral-200/60 dark:border-neutral-700/60">
-                <span className="text-neutral-400">Content Types:</span>
-                <span className="font-extrabold text-neutral-900 dark:text-white">{selectedContentTypes.join(', ')}</span>
+                <span className="text-neutral-400 font-bold">Target Market:</span>
+                <span className="font-extrabold text-neutral-900 dark:text-white">{targetCountry} ({targetLanguage})</span>
               </div>
               <div className="flex justify-between py-1 border-b border-neutral-200/60 dark:border-neutral-700/60">
-                <span className="text-neutral-400">Monetization:</span>
-                <span className="font-extrabold text-neutral-900 dark:text-white">{selectedMonetization.join(', ')}</span>
+                <span className="text-neutral-400 font-bold">AI Engine:</span>
+                <span className="font-extrabold text-neutral-900 dark:text-white">{aiModel}</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-neutral-200/60 dark:border-neutral-700/60">
+                <span className="text-neutral-400 font-bold">Enabled Tools ({selectedTools.length}):</span>
+                <span className="font-extrabold text-neutral-900 dark:text-white">{selectedTools.join(', ')}</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-neutral-200/60 dark:border-neutral-700/60">
+                <span className="text-neutral-400 font-bold">Primary Affiliate:</span>
+                <span className="font-extrabold text-emerald-600">{primaryAffiliatePlatform} ({affiliateTag || 'Tag configured'})</span>
               </div>
               <div className="flex justify-between py-1">
-                <span className="text-neutral-400">Approval Policy:</span>
-                <span className="font-extrabold text-emerald-600">{approvalMode} Approval</span>
+                <span className="text-neutral-400 font-bold">Approval Governance:</span>
+                <span className="font-extrabold text-neutral-900 dark:text-white">{approvalMode} Approval • {schedule}</span>
               </div>
             </div>
           </div>
         )}
 
-        {/* Wizard Action Buttons */}
+        {/* Wizard Controls */}
         <div className="flex items-center justify-between pt-4 border-t border-neutral-100 dark:border-neutral-800">
           {currentStep > 1 ? (
             <button
               type="button"
               onClick={() => setCurrentStep(prev => prev - 1)}
-              className="px-5 py-2.5 rounded-xl bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 text-neutral-700 dark:text-neutral-200 font-extrabold text-xs flex items-center gap-1.5 transition-colors"
+              className="px-5 py-2.5 rounded-xl bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 text-neutral-700 dark:text-neutral-200 font-extrabold text-xs flex items-center gap-1.5 transition-colors"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
               <span>Previous</span>
@@ -664,13 +814,12 @@ export default function CreateAgentWizardPage() {
               ) : (
                 <Sparkles className="w-4 h-4 text-amber-300" />
               )}
-              <span>{isSubmitting ? 'Calibrating Agent...' : 'Launch & Calibrate Agent'}</span>
+              <span>{isSubmitting ? 'Initializing Agent...' : 'Launch Agent'}</span>
             </button>
           )}
         </div>
 
       </div>
-
     </div>
   );
 }

@@ -60,19 +60,21 @@ export function generateCategoryAwareArticle(
   productsToUse.forEach((prod, idx) => {
     const productMedia = mediaPlan.productCardMedia[prod.fullName] || mediaPlan.featuredImage;
     const priceStr = prod.estimatedPrice || (website.targetCountry === 'India' ? '₹1,999' : '$29.99');
+    const merchantName = website.targetCountry === 'India' ? 'Amazon India' : 'Amazon';
     
     // Generate verified affiliate product item
+    const rawProdUrl = prod.productUrl || (website.targetCountry === 'India' ? `https://www.amazon.in/dp/B0CHX6QG73` : `https://www.amazon.com/dp/B0CHX6QG73`);
     const affItem: AffiliateProductItem = {
       name: prod.fullName,
-      url: prod.productUrl || `https://www.amazon.in/dp/B0CHX6QG73`,
-      affiliateUrl: `https://www.amazon.in/dp/B0CHX6QG73?tag=${affiliateTag}`,
-      merchant: 'Amazon India',
+      url: rawProdUrl,
+      affiliateUrl: `${rawProdUrl}?tag=${affiliateTag}`,
+      merchant: merchantName,
       price: priceStr,
       category: schema.category,
       features: schema.specs.slice(0, 4).map(s => `${s.name}: Verified specification`),
       pros: schema.defaultPros.slice(0, 3),
       cons: schema.defaultCons.slice(0, 2),
-      cta: `Check Latest Price on Amazon`
+      cta: `Check Latest Price on ${merchantName}`
     };
     affiliateProducts.push(affItem);
   });

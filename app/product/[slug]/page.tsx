@@ -257,7 +257,7 @@ export default async function ProductDetailPage({ params }: { params: { slug: st
             Guides & Reviews for this Product
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {product.blogs.map((b) => (
+            {product.blogs?.map((b: any) => (
               <BlogCard key={b.id} blog={b} />
             ))}
           </div>
