@@ -21,38 +21,30 @@ export async function POST(request: Request) {
     }
 
     let isPasswordValid = false;
-    let user = null;
+    let user: any = null;
 
-    // 2. Try fetching User from database safely without throwing on DB network error
-    try {
-      user = await db.user.findUnique({
-        where: { email: normalizedEmail },
-      });
-    } catch (dbError) {
-      console.warn('[AUTH] Database lookup warning (falling back to env credentials):', dbError);
+    // 2. Check environment variable ADMIN_PASSWORD first (fast path)
+    const envPassword = process.env.ADMIN_PASSWORD || 'Hanumandada@904';
+    if (passwordInput === envPassword || passwordInput.trim() === envPassword.trim()) {
+      isPasswordValid = true;
     }
 
-    if (user && user.status === 'ACTIVE' && user.password) {
-      if (user.password.startsWith('$2a$') || user.password.startsWith('$2b$')) {
-        isPasswordValid = await bcrypt.compare(passwordInput, user.password);
-      } else {
-        // Handle unhashed legacy password
-        isPasswordValid = (user.password === passwordInput);
-        if (isPasswordValid) {
-          const hashedPassword = await bcrypt.hash(passwordInput, 10);
-          await db.user.update({
-            where: { id: user.id },
-            data: { password: hashedPassword },
-          }).catch(() => {});
-        }
+    // 3. Fallback: Try DB lookup only if env password didn't match and Firebase credentials exist
+    if (!isPasswordValid && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY) {
+      try {
+        user = await db.user.findUnique({
+          where: { email: normalizedEmail },
+        });
+      } catch (dbError) {
+        console.warn('[AUTH] Database lookup warning:', dbError);
       }
-    }
 
-    // 3. Fallback: check against environment variable ADMIN_PASSWORD
-    if (!isPasswordValid) {
-      const envPassword = process.env.ADMIN_PASSWORD || 'Hanumandada@904';
-      if (passwordInput === envPassword || passwordInput.trim() === envPassword.trim()) {
-        isPasswordValid = true;
+      if (user && user.status === 'ACTIVE' && user.password) {
+        if (user.password.startsWith('$2a$') || user.password.startsWith('$2b$')) {
+          isPasswordValid = await bcrypt.compare(passwordInput, user.password);
+        } else {
+          isPasswordValid = (user.password === passwordInput);
+        }
       }
     }
 
@@ -80,8 +72,9 @@ export async function POST(request: Request) {
     });
 
     return response;
-  } catch (error) {
+  } catch (error: any) {
     console.error('[AUTH] Login handler error:', error);
-    return NextResponse.json({ error: 'Invalid email or password.' }, { status: 401 });
+    return NextResponse.json({ error: 'Internal server error during authentication.' }, { status: 500 });
   }
 }
+
