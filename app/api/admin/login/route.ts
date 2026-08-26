@@ -1,6 +1,4 @@
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/db';
-import bcrypt from 'bcryptjs';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,6 +33,7 @@ export async function POST(request: Request) {
     // 3. Fallback: Try DB lookup only if env password didn't match and Firebase credentials exist
     if (!isPasswordValid && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY) {
       try {
+        const { db } = await import('@/lib/db');
         user = await db.user.findUnique({
           where: { email: normalizedEmail },
         });
@@ -44,6 +43,7 @@ export async function POST(request: Request) {
 
       if (user && user.status === 'ACTIVE' && user.password) {
         if (user.password.startsWith('$2a$') || user.password.startsWith('$2b$')) {
+          const bcrypt = (await import('bcryptjs')).default;
           isPasswordValid = await bcrypt.compare(passwordInput, user.password);
         } else {
           isPasswordValid = (user.password === passwordInput);
