@@ -3,8 +3,11 @@ import prisma from '@/lib/db';
 import { ensureDefaultWebsitesSeeded } from '@/lib/saas/seed-data';
 import { generateInitialGrowthPlan } from '@/lib/saas/agent-engine';
 
+export const dynamic = 'force-dynamic';
+
 // GET /api/saas/websites
 export async function GET() {
+
   try {
     await ensureDefaultWebsitesSeeded();
 
