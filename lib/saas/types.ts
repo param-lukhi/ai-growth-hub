@@ -29,6 +29,12 @@ export interface WebsiteData {
   affiliateClicks: number;
   lastAgentRun?: Date | string | null;
   agent?: WebsiteAgentData | null;
+  ownerId?: string | null;
+  _count?: {
+    articles?: number;
+    topics?: number;
+    activityLogs?: number;
+  } | null;
   createdAt?: Date | string;
   updatedAt?: Date | string;
 }

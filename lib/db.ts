@@ -1,6 +1,8 @@
+import { initFirebaseAdmin } from './firebase-admin';
+
 function getAdminDb() {
   try {
-    const { adminDb } = require('./firebase-admin');
+    const { adminDb } = initFirebaseAdmin();
     return adminDb || null;
   } catch (e) {
     return null;
@@ -17,13 +19,36 @@ function getMemoryCollection(collectionName: string): any[] {
   return inMemoryDb[collectionName];
 }
 
+// Helper to remove undefined keys from objects before sending to Firestore
+function sanitizePayload(obj: any): any {
+  if (obj === null || obj === undefined) return null;
+  if (Array.isArray(obj)) {
+    return obj.map(item => sanitizePayload(item));
+  }
+  if (typeof obj === 'object' && !(obj instanceof Date)) {
+    const cleaned: Record<string, any> = {};
+    for (const key of Object.keys(obj)) {
+      const val = obj[key];
+      if (val !== undefined) {
+        cleaned[key] = sanitizePayload(val);
+      }
+    }
+    return cleaned;
+  }
+  return obj;
+}
+
 // Helper to convert Firestore timestamp/snapshot data to standard JS objects
 function formatDoc<T = any>(doc: any): T | null {
-  if (!doc || !doc.exists) return null;
-  const data = doc.data();
+  if (!doc) return null;
+  if (typeof doc.data !== 'function' && doc.id) {
+    return doc as T;
+  }
+  if (!doc.exists) return null;
+  const data = doc.data() || {};
   return {
-    id: doc.id,
     ...data,
+    id: data.id || doc.id,
     createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : (data.createdAt ? new Date(data.createdAt) : new Date()),
     updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : (data.updatedAt ? new Date(data.updatedAt) : new Date()),
   } as T;
@@ -48,9 +73,17 @@ function createModelHelper(collectionName: string) {
         const col = getCol();
         if (col) {
           if (where.id) {
+            // 1. Try finding by document key
             const snap = await col.doc(where.id).get();
             if (snap.exists) {
               const item = formatDoc(snap);
+              if (item && include) await attachRelations(collectionName, item, include);
+              return item;
+            }
+            // 2. Also query where('id', '==', where.id) in case doc ID differs from id field
+            const idSnapshot = await col.where('id', '==', where.id).limit(1).get();
+            if (!idSnapshot.empty) {
+              const item = formatDoc(idSnapshot.docs[0]);
               if (item && include) await attachRelations(collectionName, item, include);
               return item;
             }
@@ -77,14 +110,13 @@ function createModelHelper(collectionName: string) {
       // Memory Fallback
       const memList = getMemoryCollection(collectionName);
       const match = memList.find(item => {
-        return Object.entries(where).every(([k, v]) => item[k] === v);
+        return Object.entries(where).every(([k, v]) => item[k] === v || (k === 'id' && (item.id === v || item._id === v)));
       });
       if (match && include) {
         await attachRelations(collectionName, match, include);
       }
-      return match || null;
+      return match ? { ...match } : null;
     },
-
 
     async findFirst(args: { where?: Record<string, any>; orderBy?: any; include?: Record<string, any>; select?: Record<string, any> } = {}) {
       const { where = {}, include } = args;
@@ -116,7 +148,7 @@ function createModelHelper(collectionName: string) {
       if (match && include) {
         await attachRelations(collectionName, match, include);
       }
-      return match || null;
+      return match ? { ...match } : null;
     },
 
     async findMany(args: { where?: Record<string, any>; orderBy?: any; take?: number; skip?: number; include?: Record<string, any>; select?: any } = {}): Promise<any[]> {
@@ -175,21 +207,23 @@ function createModelHelper(collectionName: string) {
       }
 
       const col = getCol();
-      const finalId = docData.id || `demo-${Date.now()}`;
+      const finalId = docData.id || (col ? col.doc().id : `site-${Date.now()}`);
       docData.id = finalId;
       docData.createdAt = docData.createdAt || new Date();
       docData.updatedAt = docData.updatedAt || new Date();
 
+      const sanitized = sanitizePayload(docData);
+
       if (col) {
         try {
           const docRef = col.doc(finalId);
-          await docRef.set(docData);
+          await docRef.set(sanitized);
         } catch (e) {
           console.warn(`[FirestoreDb] create set error for ${collectionName}:`, e);
         }
       }
 
-      const createdItem = { ...docData };
+      const createdItem = { ...sanitized };
 
       // Save to in-memory store fallback
       const memList = getMemoryCollection(collectionName);
@@ -200,9 +234,25 @@ function createModelHelper(collectionName: string) {
         memList.push(createdItem);
       }
 
+      // Handle nested operations
       if (nestedOps.agent?.create) {
         const agentData = { ...nestedOps.agent.create, websiteId: finalId };
         const createdAgent = await firestoreDb.websiteAgent.create({ data: agentData });
+        // Also ensure it is registered in `agents` collection
+        await firestoreDb.agent.create({
+          data: {
+            name: agentData.agentName || 'Growth Agent',
+            description: agentData.role || 'Content and Growth Agent',
+            agentType: 'BLOG_WRITER',
+            websiteId: finalId,
+            status: agentData.active !== false ? 'ACTIVE' : 'PAUSED',
+            instructions: agentData.systemPrompt || '',
+            tone: agentData.tone || 'Clear, helpful, practical, trustworthy',
+            memoryState: agentData.memoryState || '{}',
+            aiModel: 'gemini-2.5-flash',
+            schedule: 'WEEKLY'
+          }
+        });
         createdItem.agent = createdAgent;
       }
 
@@ -238,11 +288,26 @@ function createModelHelper(collectionName: string) {
       const { where, data, include } = args;
       let targetId = where.id;
 
+      const col = getCol();
+
       if (!targetId) {
         const existing = await this.findFirst({ where });
         if (existing) targetId = existing.id;
       }
-      targetId = targetId || `demo-${Date.now()}`;
+
+      if (!targetId && col) {
+        // Look up by where filter in Firestore
+        let q: any = col;
+        for (const k of Object.keys(where)) {
+          if (where[k] !== undefined) q = q.where(k, '==', where[k]);
+        }
+        const snap = await q.limit(1).get();
+        if (!snap.empty) {
+          targetId = snap.docs[0].id;
+        }
+      }
+
+      targetId = targetId || `site-${Date.now()}`;
 
       const updateData: any = { ...data, updatedAt: new Date() };
 
@@ -255,16 +320,36 @@ function createModelHelper(collectionName: string) {
         }
       }
 
-      const col = getCol();
-      let updatedItem: any = { id: targetId, ...updateData };
+      const sanitized = sanitizePayload(updateData);
+      let updatedItem: any = { id: targetId, ...sanitized };
 
       if (col) {
         try {
-          const docRef = col.doc(targetId);
-          await docRef.set(updateData, { merge: true });
-          const updatedSnap = await docRef.get();
-          const item = formatDoc(updatedSnap);
-          if (item) updatedItem = item;
+          // Check if document exists with this doc id
+          let docRef = col.doc(targetId);
+          const snap = await docRef.get();
+          if (snap.exists) {
+            await docRef.set(sanitized, { merge: true });
+            const updatedSnap = await docRef.get();
+            const item = formatDoc(updatedSnap);
+            if (item) updatedItem = item;
+          } else {
+            // Check if document has id == targetId field
+            const idSnap = await col.where('id', '==', targetId).limit(1).get();
+            if (!idSnap.empty) {
+              docRef = idSnap.docs[0].ref;
+              await docRef.set(sanitized, { merge: true });
+              const updatedSnap = await docRef.get();
+              const item = formatDoc(updatedSnap);
+              if (item) updatedItem = item;
+            } else {
+              // Create / set with targetId
+              await docRef.set(sanitized, { merge: true });
+              const updatedSnap = await docRef.get();
+              const item = formatDoc(updatedSnap);
+              if (item) updatedItem = item;
+            }
+          }
         } catch (e) {
           console.warn(`[FirestoreDb] update error for ${collectionName}:`, e);
         }
@@ -293,8 +378,7 @@ function createModelHelper(collectionName: string) {
 
       if (!targetId) {
         const existing = await this.findFirst({ where });
-        if (!existing) return null;
-        targetId = existing.id;
+        if (existing) targetId = existing.id;
       }
 
       // Delete from memory store
@@ -303,16 +387,67 @@ function createModelHelper(collectionName: string) {
       let deletedItem = memIdx >= 0 ? memList[memIdx] : null;
       if (memIdx >= 0) memList.splice(memIdx, 1);
 
-      if (col) {
+      if (col && targetId) {
         try {
-          const snap = await col.doc(targetId).get();
-          const item = formatDoc(snap);
-          if (item) deletedItem = item;
-          await col.doc(targetId).delete();
-        } catch (e) {}
+          const docRef = col.doc(targetId);
+          const snap = await docRef.get();
+          if (snap.exists) {
+            const item = formatDoc(snap);
+            if (item) deletedItem = item;
+            await docRef.delete();
+          } else {
+            const idSnap = await col.where('id', '==', targetId).limit(1).get();
+            if (!idSnap.empty) {
+              const item = formatDoc(idSnap.docs[0]);
+              if (item) deletedItem = item;
+              await idSnap.docs[0].ref.delete();
+            }
+          }
+        } catch (e) {
+          console.warn(`[FirestoreDb] delete error for ${collectionName}:`, e);
+        }
       }
 
       return deletedItem;
+    },
+
+    async deleteMany(args: { where?: Record<string, any> } = {}) {
+      const { where = {} } = args;
+      let deletedCount = 0;
+      const col = getCol();
+
+      if (col) {
+        try {
+          let q: any = col;
+          for (const k of Object.keys(where)) {
+            if (where[k] !== undefined) {
+              q = q.where(k, '==', where[k]);
+            }
+          }
+          const snapshot = await q.get();
+          if (!snapshot.empty) {
+            const batch = getAdminDb()?.batch();
+            snapshot.docs.forEach((doc: any) => {
+              if (batch) batch.delete(doc.ref);
+            });
+            if (batch) await batch.commit();
+            deletedCount = snapshot.size;
+          }
+        } catch (e) {
+          console.warn(`[FirestoreDb] deleteMany error for ${collectionName}:`, e);
+        }
+      }
+
+      // Delete from memory store
+      const memList = getMemoryCollection(collectionName);
+      const originalLength = memList.length;
+      const filtered = memList.filter(item => {
+        return !Object.entries(where).every(([k, v]) => item[k] === v);
+      });
+      inMemoryDb[collectionName] = filtered;
+      deletedCount = Math.max(deletedCount, originalLength - filtered.length);
+
+      return { count: deletedCount };
     },
 
     async count(args: { where?: Record<string, any> } = {}) {
@@ -349,21 +484,29 @@ function createModelHelper(collectionName: string) {
           const batch = dbInstance.batch();
           for (const item of args.data) {
             const docRef = item.id ? col.doc(item.id) : col.doc();
-            batch.set(docRef, {
+            const finalDoc = sanitizePayload({
               ...item,
               id: docRef.id,
               createdAt: item.createdAt || new Date(),
               updatedAt: item.updatedAt || new Date(),
             });
+            batch.set(docRef, finalDoc);
           }
           await batch.commit();
         } catch (e) {
           console.warn(`[FirestoreDb] createMany batch error for ${collectionName}:`, e);
         }
       }
+
+      // Memory store fallback
+      const memList = getMemoryCollection(collectionName);
+      for (const item of args.data) {
+        const id = item.id || `item-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+        memList.push({ ...item, id, createdAt: item.createdAt || new Date(), updatedAt: item.updatedAt || new Date() });
+      }
+
       return { count: args.data.length };
     },
-
 
     async upsert(args: { where: Record<string, any>; create: Record<string, any>; update: Record<string, any>; include?: Record<string, any> }) {
       const existing = await this.findFirst({ where: args.where, include: args.include });

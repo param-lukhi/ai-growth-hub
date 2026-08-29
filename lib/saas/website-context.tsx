@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { WebsiteData } from './types';
 
 interface WebsiteContextType {
@@ -23,43 +23,63 @@ export function WebsiteProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
-  const fetchWebsites = async () => {
+  const fetchWebsites = useCallback(async () => {
     try {
       setIsLoading(true);
       const res = await fetch('/api/saas/websites');
+      
+      if (!res.ok) {
+        if (res.status === 401) {
+          // Unauthenticated session, page-level middleware will handle login redirect if needed
+          return;
+        }
+        console.warn(`[WebsiteContext] HTTP ${res.status} when fetching websites`);
+        return;
+      }
+
+      const contentType = res.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        console.warn('[WebsiteContext] Expected JSON response but received non-JSON');
+        return;
+      }
+
       const data = await res.json();
-      if (data.success && Array.isArray(data.websites) && data.websites.length > 0) {
+      if (data.success && Array.isArray(data.websites)) {
         setWebsites(data.websites);
 
-        // Check if there is a saved website ID in localStorage
-        const savedId = typeof window !== 'undefined' ? localStorage.getItem('ai_growth_active_website_id') : null;
-        const matched = savedId ? data.websites.find((w: WebsiteData) => w.id === savedId) : null;
+        if (data.websites.length > 0) {
+          // Check if there is a saved website ID in localStorage
+          const savedId = typeof window !== 'undefined' ? localStorage.getItem('ai_growth_active_website_id') : null;
+          const matched = savedId ? data.websites.find((w: WebsiteData) => w.id === savedId) : null;
 
-        if (matched) {
-          setCurrentWebsiteState(matched);
-        } else {
-          // Default to TechPulse or first website
-          const techpulse = data.websites.find((w: WebsiteData) => w.slug === 'techpulse') || data.websites[0];
-          setCurrentWebsiteState(techpulse);
-          if (typeof window !== 'undefined') {
-            localStorage.setItem('ai_growth_active_website_id', techpulse.id);
+          if (matched) {
+            setCurrentWebsiteState(matched);
+          } else {
+            // Default to TechPulse or first website
+            const techpulse = data.websites.find((w: WebsiteData) => w.slug === 'techpulse') || data.websites[0];
+            setCurrentWebsiteState(techpulse);
+            if (typeof window !== 'undefined' && techpulse) {
+              localStorage.setItem('ai_growth_active_website_id', techpulse.id);
+            }
           }
+        } else {
+          setCurrentWebsiteState(null);
         }
       }
     } catch (err) {
-      console.error('Failed to load websites context:', err);
+      console.error('[WebsiteContext] Failed to load websites context:', err);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchWebsites();
-  }, []);
+  }, [fetchWebsites]);
 
   const setCurrentWebsite = (website: WebsiteData) => {
     setCurrentWebsiteState(website);
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && website?.id) {
       localStorage.setItem('ai_growth_active_website_id', website.id);
     }
   };

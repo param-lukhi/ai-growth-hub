@@ -2,13 +2,18 @@ import { NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { ensureDefaultWebsitesSeeded } from '@/lib/saas/seed-data';
 import { generateInitialGrowthPlan } from '@/lib/saas/agent-engine';
+import { validateAdminAuth, unauthorizedResponse } from '@/lib/auth-server';
 
 export const dynamic = 'force-dynamic';
 
 // GET /api/saas/websites
-export async function GET() {
-
+export async function GET(request: Request) {
   try {
+    const auth = validateAdminAuth(request);
+    if (!auth.authorized) {
+      return unauthorizedResponse(auth.error);
+    }
+
     await ensureDefaultWebsitesSeeded();
 
     const websites = await prisma.website.findMany({
@@ -28,17 +33,19 @@ export async function GET() {
     return NextResponse.json({ success: true, websites });
   } catch (error: any) {
     console.error('Error fetching websites:', error);
-    let errorMessage = error.message || 'Failed to fetch websites.';
-    if (errorMessage.includes('DATABASE_URL') || errorMessage.includes('empty string') || errorMessage.includes('datasource')) {
-      errorMessage = 'Database connection (DATABASE_URL) is not configured in Vercel environment variables. Please add DATABASE_URL in Vercel Project Settings.';
-    }
+    const errorMessage = error.message || 'Failed to fetch websites.';
     return NextResponse.json({ success: false, error: errorMessage }, { status: 500 });
   }
 }
 
-// POST /api/saas/websites - Add Website Wizard Submission
+// POST /api/saas/websites - Add Website Wizard / Creation Submission
 export async function POST(request: Request) {
   try {
+    const auth = validateAdminAuth(request);
+    if (!auth.authorized) {
+      return unauthorizedResponse(auth.error);
+    }
+
     const body = await request.json();
     const {
       name,
@@ -72,28 +79,31 @@ export async function POST(request: Request) {
     const existing = await prisma.website.findUnique({ where: { slug } });
     const finalSlug = existing ? `${slug}-${Date.now()}` : slug;
 
-    // Create Website
+    // Create Website in Firestore
     const website = await prisma.website.create({
       data: {
-        ownerId: body.ownerId || body.userId || 'admin-user-id',
-        name,
+        ownerId: body.ownerId || body.userId || auth.user?.email || 'admin-user-id',
+        name: name.trim(),
         slug: finalSlug,
-        domainUrl: domainUrl.startsWith('http') ? domainUrl : `https://${domainUrl}`,
-        niche,
-        subNiche,
-        targetCountry,
-        targetLanguage,
-        targetAudience,
+        domainUrl: domainUrl.startsWith('http') ? domainUrl.trim() : `https://${domainUrl.trim()}`,
+        niche: niche.trim(),
+        subNiche: subNiche ? subNiche.trim() : '',
+        targetCountry: targetCountry ? targetCountry.trim() : 'India',
+        targetLanguage: targetLanguage ? targetLanguage.trim() : 'English',
+        targetAudience: targetAudience || `Consumers shopping in ${niche}`,
         brandVoice: brandVoice || 'Clear, helpful, practical, trustworthy',
         contentStyle: contentStyle || 'Research-backed buying guides and verified product comparisons',
         primaryTopics: typeof primaryTopics === 'string' ? primaryTopics : JSON.stringify(primaryTopics),
         topicsToAvoid: typeof topicsToAvoid === 'string' ? topicsToAvoid : JSON.stringify(topicsToAvoid),
         monetization: typeof monetization === 'string' ? monetization : JSON.stringify(monetization),
-        publishingFrequency,
-        approvalMode,
-        cmsType,
+        publishingFrequency: publishingFrequency || 'WEEKLY',
+        approvalMode: approvalMode || 'MANUAL',
+        cmsType: cmsType || 'NATIVE',
         cmsConfig: cmsConfig ? (typeof cmsConfig === 'string' ? cmsConfig : JSON.stringify(cmsConfig)) : null,
         status: 'ACTIVE',
+        articlesCount: 0,
+        trafficCount: 0,
+        affiliateClicks: 0,
         lastAgentRun: new Date(),
         agent: {
           create: {
@@ -141,11 +151,11 @@ export async function POST(request: Request) {
       }
     });
 
-    // Generate initial growth plan and seed initial 5 prioritized topic opportunities
+    // Generate initial growth plan and seed initial prioritized topic opportunities
     const growthPlan = generateInitialGrowthPlan(website as any);
-    if (growthPlan.topics.length > 0) {
+    if (growthPlan && growthPlan.topics && growthPlan.topics.length > 0) {
       await prisma.topicOpportunity.createMany({
-        data: growthPlan.topics.map(t => ({
+        data: growthPlan.topics.map((t: any) => ({
           websiteId: website.id,
           topic: t.topic || 'New Topic',
           primaryKeyword: t.primaryKeyword || 'keyword',
@@ -167,13 +177,10 @@ export async function POST(request: Request) {
       success: true,
       website,
       growthReport: growthPlan
-    });
+    }, { status: 201 });
   } catch (error: any) {
     console.error('Error creating website:', error);
-    let errorMessage = error.message || 'Failed to create website and AI agent.';
-    if (errorMessage.includes('DATABASE_URL') || errorMessage.includes('credentials') || errorMessage.includes('ADC')) {
-      errorMessage = 'Firestore database credentials (FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY) are missing in environment variables.';
-    }
+    const errorMessage = error.message || 'Failed to create website and AI agent.';
     return NextResponse.json({ success: false, error: errorMessage }, { status: 500 });
   }
 }

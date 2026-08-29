@@ -103,6 +103,12 @@ export default function AddWebsiteWizard() {
           niche: formData.niche === 'Custom' ? (formData.customNiche || 'General') : formData.niche
         })
       });
+
+      const contentType = res.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        throw new Error(`Server returned HTTP ${res.status} with non-JSON response.`);
+      }
+
       const data = await res.json();
       if (data.success && data.website) {
         setGrowthReport(data.growthReport);
